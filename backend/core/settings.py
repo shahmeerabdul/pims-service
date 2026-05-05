@@ -123,17 +123,24 @@ DATABASES = {
     'default': env.db('DATABASE_URL', default='postgres://psych_user:psych_pass@db:5432/psych_db')
 }
 DATABASES['default']['TEST'] = {'NAME': 'test_psych_clean_db'}
-# Connection pooling for better performance in production-like containers
+# Keep DB connections alive for 10 minutes (avoids TCP handshake per request)
 DATABASES['default']['CONN_MAX_AGE'] = 600
+# Recycle stale connections automatically (avoids errors after DB restart)
+DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
-# Caches
-# https://docs.djangoproject.com/en/6.0/ref/settings/#caches
+# Caches — Redis with connection pooling
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': env('REDIS_URL', default='redis://127.0.0.1:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,  # Allow up to 50 concurrent Redis connections
+            },
+            'SOCKET_CONNECT_TIMEOUT': 2,  # Fail fast if Redis is unreachable
+            'SOCKET_TIMEOUT': 2,
+            'IGNORE_EXCEPTIONS': True,   # Degrade gracefully if Redis is down
         }
     }
 }

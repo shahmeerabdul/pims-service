@@ -72,6 +72,14 @@ class ResponseSet(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            # Speeds up: admin analytics queries filtering by status+date
+            models.Index(fields=['status', 'completed_at'], name='idx_rs_status_completed'),
+            # Speeds up: participant dashboard loading their own responses
+            models.Index(fields=['user', 'status'], name='idx_rs_user_status'),
+        ]
+
     def __str__(self):
         return f"{self.user.username} - {self.questionnaire.title} ({self.status})"
 

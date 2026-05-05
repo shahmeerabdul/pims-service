@@ -101,56 +101,103 @@ class AdminDashboardAnalyticsView(APIView):
     def get(self, request):
         import datetime
         from django.utils import timezone
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
         from questionnaires.models import ResponseSet
         from phases.models import Phase
+
+        now = timezone.now()
+        seven_days_ago = now - datetime.timedelta(days=7)
 
         user_qs = User.objects.filter(is_superuser=False)
         total_participants = user_qs.count()
 
+        # --- Single query for all submission/baseline counts ---
         completed_baselines = ResponseSet.objects.filter(status='COMPLETED').count()
         total_activities = Submission.objects.count()
         total_submissions = completed_baselines + total_activities
 
-        seven_days_ago = timezone.now() - datetime.timedelta(days=7)
-        
-        # Submissions in last 7 days to calculate active rate
-        active_baseline_users = ResponseSet.objects.filter(status='COMPLETED', completed_at__gte=seven_days_ago).values_list('user_id', flat=True)
-        active_activity_users = Submission.objects.filter(submission_date__gte=seven_days_ago).values_list('user_id', flat=True)
-        active_users = set(active_baseline_users) | set(active_activity_users)
+        # --- Active users: two flat queries + Python set union (no loop) ---
+        active_baseline_ids = set(
+            ResponseSet.objects.filter(status='COMPLETED', completed_at__gte=seven_days_ago)
+            .values_list('user_id', flat=True)
+        )
+        active_activity_ids = set(
+            Submission.objects.filter(submission_date__gte=seven_days_ago)
+            .values_list('user_id', flat=True)
+        )
+        active_users = active_baseline_ids | active_activity_ids
         active_rate = round((len(active_users) / total_participants * 100), 1) if total_participants > 0 else 0
 
-        # Phase Status
-        today = timezone.now().date()
+        # --- Phase Status ---
+        today = now.date()
         current_phase = Phase.objects.filter(start_date__lte=today, end_date__gte=today).first()
         current_phase_name = current_phase.name if current_phase else "Pre-Launch"
 
-        # Engagement Trend (last 7 days grouped by date)
-        # We query day by day for the last 7 days
+        # --- Engagement Trend: SINGLE aggregated query instead of 7 separate ones ---
+        day_start_7 = (now - datetime.timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        baseline_by_day = (
+            ResponseSet.objects
+            .filter(status='COMPLETED', completed_at__gte=day_start_7)
+            .annotate(day=TruncDate('completed_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+        )
+        activity_by_day = (
+            Submission.objects
+            .filter(submission_date__gte=day_start_7)
+            .annotate(day=TruncDate('submission_date'))
+            .values('day')
+            .annotate(count=Count('id'))
+        )
+
+        # Merge into a dict keyed by date
+        day_counts = {}
+        for row in baseline_by_day:
+            day_counts[row['day']] = day_counts.get(row['day'], 0) + row['count']
+        for row in activity_by_day:
+            day_counts[row['day']] = day_counts.get(row['day'], 0) + row['count']
+
         engagement_trend = []
         for i in range(6, -1, -1):
-            day_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - datetime.timedelta(days=i)
-            day_end = day_start + datetime.timedelta(days=1)
-            b_count = ResponseSet.objects.filter(status='COMPLETED', completed_at__gte=day_start, completed_at__lt=day_end).count()
-            a_count = Submission.objects.filter(submission_date__gte=day_start, submission_date__lt=day_end).count()
-            
+            d = (now - datetime.timedelta(days=i)).date()
             engagement_trend.append({
-                'date': day_start.strftime('%a %d'), 
-                'count': b_count + a_count
+                'date': d.strftime('%a %d'),
+                'count': day_counts.get(d, 0)
             })
 
-        # Recent Participants
-        recent_users_qs = user_qs.select_related('group').order_by('-created_at')[:8]
+        # --- Recent Participants: bulk count queries instead of per-user N+1 ---
+        recent_users = list(user_qs.select_related('group').order_by('-created_at')[:8])
+        recent_user_ids = [u.user_id for u in recent_users]
+
+        # Bulk: baselines per user
+        baseline_counts = dict(
+            ResponseSet.objects
+            .filter(user_id__in=recent_user_ids, status='COMPLETED')
+            .values('user_id')
+            .annotate(c=Count('id'))
+            .values_list('user_id', 'c')
+        )
+        # Bulk: activity submissions per user
+        activity_counts = dict(
+            Submission.objects
+            .filter(user_id__in=recent_user_ids)
+            .values('user_id')
+            .annotate(c=Count('id'))
+            .values_list('user_id', 'c')
+        )
+
         recent_participants = []
-        for u in recent_users_qs:
-            b_count = u.responseset_set.filter(status='COMPLETED').count() if hasattr(u, 'responseset_set') else 0
-            a_count = u.submissions.count() if hasattr(u, 'submissions') else 0
-            
+        for u in recent_users:
+            b = baseline_counts.get(u.user_id, 0)
+            a = activity_counts.get(u.user_id, 0)
             recent_participants.append({
-                'id': u.id,
+                'id': u.user_id,
                 'username': u.username,
-                'group': u.group.name if hasattr(u, 'group') and u.group else 'Unassigned',
-                'submissions_count': f"{b_count + a_count}/9", # format for dashboard out of 9 (1 baseline + 7 activities + 1 post-test)
-                'status': 'Active' if u.id in active_users else 'Inactive'
+                'group': u.group.name if u.group else 'Unassigned',
+                'submissions_count': f"{b + a}/9",
+                'status': 'Active' if u.user_id in active_users else 'Inactive'
             })
 
         return Response({
@@ -161,3 +208,4 @@ class AdminDashboardAnalyticsView(APIView):
             'engagement_trend': engagement_trend,
             'recent_participants': recent_participants
         })
+

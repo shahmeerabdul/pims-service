@@ -25,8 +25,8 @@ class Submission(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='submissions')
     activity = models.ForeignKey(Activity, on_delete=models.CASCADE, related_name='submissions')
     content = models.TextField()
-    experiment_day = models.PositiveIntegerField(null=True, blank=True)
-    submission_date = models.DateTimeField(auto_now_add=True)
+    experiment_day = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    submission_date = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -40,6 +40,10 @@ class Submission(models.Model):
                 fields=['user', 'experiment_day'],
                 name='unique_user_experiment_day'
             )
+        ]
+        indexes = [
+            # Speeds up: "Did this user submit today?" — the most frequent query
+            models.Index(fields=['user', 'submission_date'], name='idx_submission_user_date'),
         ]
 
     def __str__(self):
