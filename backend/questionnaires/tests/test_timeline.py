@@ -1,0 +1,214 @@
+import pytest
+from rest_framework import status
+from rest_framework.test import APIClient
+from django.utils import timezone
+from datetime import timedelta
+from freezegun import freeze_time
+from django.core.cache import cache
+
+from users.models import User, Role
+from questionnaires.models import Questionnaire, Question, Option, ResponseSet
+
+@pytest.fixture(autouse=True)
+def clear_redis_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+@pytest.fixture
+def api_client():
+    return APIClient()
+
+@pytest.fixture
+def participant_role(db):
+    return Role.objects.get_or_create(name='Participant')[0]
+
+@pytest.fixture
+def fresh_user(db, participant_role):
+    return User.objects.create_user(
+        username='fresh_user',
+        email='fresh@test.com',
+        password='password123',
+        role=participant_role,
+        has_completed_sociodemographic=False,
+        has_completed_baseline=False
+    )
+
+@pytest.fixture
+def onboarded_user(db, participant_role):
+    return User.objects.create_user(
+        username='onboarded_user',
+        email='onboarded@test.com',
+        password='password123',
+        role=participant_role,
+        has_completed_sociodemographic=True,
+        has_completed_baseline=True,
+        baseline_completed_at=timezone.now()
+    )
+
+@pytest.fixture
+def questionnaire(db):
+    q = Questionnaire.objects.create(
+        title='Psychometric Scale Battery',
+        assessment_type='PSYCHOMETRIC',
+        is_active=True
+    )
+    return q
+
+@pytest.mark.django_db
+class TestTimelineScheduler:
+    def test_onboarding_user_due_signup(self, fresh_user):
+        assert fresh_user.get_due_milestone == 'SIGNUP'
+
+    def test_timeline_milestones_due_sequence(self, onboarded_user, questionnaire):
+        base_time = timezone.now()
+        onboarded_user.baseline_completed_at = base_time
+        onboarded_user.save()
+
+        # Day 0: None is due
+        cache.clear()
+        assert onboarded_user.get_due_milestone is None
+
+        # Day 5: None is due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=5)):
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 7: 7_DAYS is due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=7)):
+            assert onboarded_user.get_due_milestone == '7_DAYS'
+            
+            cache_key = f"user:{onboarded_user.id}:due_milestone"
+            assert cache.get(cache_key) == '7_DAYS'
+
+            # Submit 7_DAYS ResponseSet
+            ResponseSet.objects.create(
+                user=onboarded_user,
+                questionnaire=questionnaire,
+                status='COMPLETED',
+                milestone='7_DAYS',
+                completed_at=timezone.now()
+            )
+            cache.delete(cache_key)
+            cache.clear()
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 89: 3_MONTHS is not due yet
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=89)):
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 90: 3_MONTHS is due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=90)):
+            assert onboarded_user.get_due_milestone == '3_MONTHS'
+            
+            # Submit 3_MONTHS completion
+            ResponseSet.objects.create(
+                user=onboarded_user,
+                questionnaire=questionnaire,
+                status='COMPLETED',
+                milestone='3_MONTHS',
+                completed_at=timezone.now()
+            )
+            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.clear()
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 179: 6_MONTHS is not due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=179)):
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 180: 6_MONTHS is due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=180)):
+            assert onboarded_user.get_due_milestone == '6_MONTHS'
+            
+            # Submit 6_MONTHS completion
+            ResponseSet.objects.create(
+                user=onboarded_user,
+                questionnaire=questionnaire,
+                status='COMPLETED',
+                milestone='6_MONTHS',
+                completed_at=timezone.now()
+            )
+            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.clear()
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 364: 1_YEAR is not due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=364)):
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 365: 1_YEAR is due
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=365)):
+            assert onboarded_user.get_due_milestone == '1_YEAR'
+            
+            # Submit 1_YEAR completion
+            ResponseSet.objects.create(
+                user=onboarded_user,
+                questionnaire=questionnaire,
+                status='COMPLETED',
+                milestone='1_YEAR',
+                completed_at=timezone.now()
+            )
+            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.clear()
+            assert onboarded_user.get_due_milestone is None
+
+    def test_cache_invalidation_on_submission(self, api_client, onboarded_user, questionnaire):
+        base_time = timezone.now()
+        onboarded_user.baseline_completed_at = base_time
+        onboarded_user.save()
+
+        with freeze_time(base_time + timedelta(days=7)):
+            assert onboarded_user.get_due_milestone == '7_DAYS'
+            cache_key = f"user:{onboarded_user.id}:due_milestone"
+            assert cache.get(cache_key) == '7_DAYS'
+
+            # Submit via ResponseSetSubmitSerializer
+            rs = ResponseSet.objects.create(
+                user=onboarded_user,
+                questionnaire=questionnaire,
+                status='DRAFT',
+                milestone='7_DAYS'
+            )
+
+            q = Question.objects.create(questionnaire=questionnaire, content='Test Question', type='SCALE', order=1)
+            opt = Option.objects.create(question=q, label='Good', numeric_value=1, order=1)
+
+            from questionnaires.serializers import ResponseSetSubmitSerializer
+            serializer = ResponseSetSubmitSerializer(
+                instance=rs,
+                data={'responses_data': [{'question_id': str(q.id), 'selected_option_id': str(opt.id)}]},
+                partial=True
+            )
+            assert serializer.is_valid(), serializer.errors
+            serializer.save()
+
+            # Verify cache cleared
+            assert cache.get(cache_key) is None
+
+    def test_due_milestone_api_view(self, api_client, onboarded_user):
+        api_client.force_authenticate(user=onboarded_user)
+        url = '/api/questionnaires/due/'
+        response = api_client.get(url)
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['due_milestone'] is None
+
+        base_time = onboarded_user.baseline_completed_at
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=7)):
+            response = api_client.get(url)
+            assert response.status_code == status.HTTP_200_OK
+            assert response.data['due_milestone'] == '7_DAYS'
+
+    def test_due_milestone_api_unauthenticated(self, api_client):
+        url = '/api/questionnaires/due/'
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

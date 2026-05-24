@@ -101,6 +101,57 @@ class User(AbstractUser):
         return self.current_experiment_day is not None and self.current_experiment_day >= 7
 
     @property
+    def get_due_milestone(self):
+        """
+        Calculates and returns the user's currently due assessment milestone:
+        'SIGNUP', '7_DAYS', '3_MONTHS', '6_MONTHS', '1_YEAR', or None.
+        Caches the result in Redis until next midnight to optimize speed.
+        """
+        cache_key = f"user:{self.user_id}:due_milestone"
+        cached_val = cache.get(cache_key)
+        if cached_val is not None:
+            return None if cached_val == "NONE" else cached_val
+
+        # If onboarding is incomplete, SIGNUP is due.
+        if not self.has_completed_sociodemographic or not self.has_completed_baseline:
+            return 'SIGNUP'
+
+        if not self.baseline_completed_at:
+            return None
+
+        # Fetch completed milestones to prevent double-serving
+        from questionnaires.models import ResponseSet
+        completed_milestones = set(
+            ResponseSet.objects.filter(user=self, status='COMPLETED', milestone__isnull=False)
+            .values_list('milestone', flat=True)
+        )
+        if self.has_completed_posttest:
+            completed_milestones.add('7_DAYS')
+
+        now = timezone.now()
+        delta = now.date() - self.baseline_completed_at.date()
+        days = delta.days
+
+        due = None
+        # Evaluate timeline sequentially
+        if '7_DAYS' not in completed_milestones and self.current_experiment_day is not None and self.current_experiment_day >= 7:
+            due = '7_DAYS'
+        elif '3_MONTHS' not in completed_milestones and days >= 90:
+            due = '3_MONTHS'
+        elif '6_MONTHS' not in completed_milestones and days >= 180:
+            due = '6_MONTHS'
+        elif '1_YEAR' not in completed_milestones and days >= 365:
+            due = '1_YEAR'
+
+        # Cache until midnight
+        tomorrow = (now + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        seconds_until_midnight = int((tomorrow - now).total_seconds())
+        if seconds_until_midnight > 0:
+            cache.set(cache_key, due if due is not None else "NONE", timeout=seconds_until_midnight)
+
+        return due
+
+    @property
     def completion_rate(self):
         """
         Calculates the percentage of daily activities completed relative to current day.

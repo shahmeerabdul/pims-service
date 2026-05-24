@@ -177,4 +177,8 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
                 user.posttest_completed_at = timezone.now()
                 user.save(update_fields=['has_completed_posttest', 'posttest_completed_at'])
 
+            # Invalidate cached due milestone on submission
+            from django.core.cache import cache
+            cache.delete(f"user:{user.id}:due_milestone")
+
         return instance
