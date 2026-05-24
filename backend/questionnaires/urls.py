@@ -9,7 +9,8 @@ from .views import (
     AdminBaselineResponseListView,
     AdminBaselineResponseDetailView,
     AdminPosttestResponseListView,
-    AdminPosttestResponseDetailView
+    AdminPosttestResponseDetailView,
+    DueMilestoneView
 )
 from .analytics_views import (
     QuestionnaireExportView,
@@ -24,6 +25,7 @@ urlpatterns = [
     path('posttests/', AdminPosttestResponseListView.as_view(), name='admin_posttest_list'),
     path('posttests/<uuid:pk>/', AdminPosttestResponseDetailView.as_view(), name='admin_posttest_detail'),
 
+    path('due/', DueMilestoneView.as_view(), name='due_milestone'),
     path('', QuestionnaireListView.as_view(), name='questionnaire_list'),
     path('<uuid:pk>/', QuestionnaireDetailView.as_view(), name='questionnaire_detail'),
     path('response-sets/', ResponseSetListCreateView.as_view(), name='response_set_list_create'),

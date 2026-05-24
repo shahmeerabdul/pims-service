@@ -171,3 +171,16 @@ class AdminPosttestResponseDetailView(generics.RetrieveAPIView):
             'responses__question',
             'responses__selected_option'
         )
+
+
+class DueMilestoneView(generics.GenericAPIView):
+    """
+    Endpoint to retrieve the user's currently due longitudinal assessment milestone.
+    """
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        return DRFResponse({
+            'due_milestone': user.get_due_milestone
+        }, status=status.HTTP_200_OK)
