@@ -73,3 +73,72 @@ class TestDailyReminders:
         notification = Notification.objects.filter(user=u1).first()
         assert "Good evening" in notification.message
         assert "still time" in notification.message
+
+
+@pytest.mark.django_db
+class TestLongitudinalReminders:
+    """
+    Test suite for send_longitudinal_milestone_reminders task.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_redis_cache(self):
+        from django.core.cache import cache
+        cache.clear()
+        yield
+        cache.clear()
+
+    @patch('notifications.tasks.send_notification.delay')
+    def test_milestone_reminders_targeting(self, mock_delay, test_group):
+        from notifications.tasks import send_longitudinal_milestone_reminders
+        from datetime import timedelta
+        from django.utils import timezone
+        from questionnaires.models import Questionnaire, ResponseSet
+
+        # 1. User who completed baseline exactly 7 days ago (7_DAYS is due)
+        u1 = User.objects.create_user(
+            username="due_7_days", email="u1@test.com", password="pwd",
+            group=test_group, has_completed_baseline=True,
+            baseline_completed_at=timezone.now() - timedelta(days=7),
+            has_completed_sociodemographic=True
+        )
+
+        # 2. User who completed baseline 3 days ago (not due for anything yet)
+        u2 = User.objects.create_user(
+            username="not_due", email="u2@test.com", password="pwd",
+            group=test_group, has_completed_baseline=True,
+            baseline_completed_at=timezone.now() - timedelta(days=3),
+            has_completed_sociodemographic=True
+        )
+
+        # 3. User who completed baseline 90 days ago but already completed the 3_MONTHS milestone (and 7_DAYS milestone)
+        u3 = User.objects.create_user(
+            username="already_done_3m", email="u3@test.com", password="pwd",
+            group=test_group, has_completed_baseline=True,
+            baseline_completed_at=timezone.now() - timedelta(days=90),
+            has_completed_sociodemographic=True
+        )
+        q = Questionnaire.objects.create(title="Battery", assessment_type="PSYCHOMETRIC")
+        ResponseSet.objects.create(user=u3, questionnaire=q, status='COMPLETED', milestone='7_DAYS')
+        ResponseSet.objects.create(user=u3, questionnaire=q, status='COMPLETED', milestone='3_MONTHS')
+
+        # Run task
+        result = send_longitudinal_milestone_reminders()
+
+        # Assertions
+        assert "Sent 1 longitudinal milestone reminders" in result
+        
+        # Verify u1 received the notification
+        assert Notification.objects.filter(user=u1, message__icontains="7-day").exists()
+        # Verify u2 and u3 did not
+        assert not Notification.objects.filter(user=u2).exists()
+        assert not Notification.objects.filter(user=u3).exists()
+
+        # Celery task should be called exactly once (for u1)
+        assert mock_delay.call_count == 1
+
+        # 4. Running the task again on the same day should send 0 reminders (cached key prevents duplication)
+        mock_delay.reset_mock()
+        result_retry = send_longitudinal_milestone_reminders()
+        assert "Sent 0 longitudinal milestone reminders" in result_retry
+        assert mock_delay.call_count == 0

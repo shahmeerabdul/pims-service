@@ -79,7 +79,7 @@ class TestTimelineScheduler:
         with freeze_time(base_time + timedelta(days=7)):
             assert onboarded_user.get_due_milestone == '7_DAYS'
             
-            cache_key = f"user:{onboarded_user.id}:due_milestone"
+            cache_key = f"user_{onboarded_user.id}_due_milestone"
             assert cache.get(cache_key) == '7_DAYS'
 
             # Submit 7_DAYS ResponseSet
@@ -167,7 +167,7 @@ class TestTimelineScheduler:
 
         with freeze_time(base_time + timedelta(days=7)):
             assert onboarded_user.get_due_milestone == '7_DAYS'
-            cache_key = f"user:{onboarded_user.id}:due_milestone"
+            cache_key = f"user_{onboarded_user.id}_due_milestone"
             assert cache.get(cache_key) == '7_DAYS'
 
             # Submit via ResponseSetSubmitSerializer

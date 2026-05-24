@@ -107,7 +107,7 @@ class User(AbstractUser):
         'SIGNUP', '7_DAYS', '3_MONTHS', '6_MONTHS', '1_YEAR', or None.
         Caches the result in Redis until next midnight to optimize speed.
         """
-        cache_key = f"user:{self.user_id}:due_milestone"
+        cache_key = f"user_{self.user_id}_due_milestone"
         cached_val = cache.get(cache_key)
         if cached_val is not None:
             return None if cached_val == "NONE" else cached_val

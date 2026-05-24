@@ -179,6 +179,6 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
 
             # Invalidate cached due milestone on submission
             from django.core.cache import cache
-            cache.delete(f"user:{user.id}:due_milestone")
+            cache.delete(f"user_{user.id}_due_milestone")
 
         return instance

@@ -76,3 +76,68 @@ def check_and_send_daily_reminders(reminder_type='morning'):
             reminded_count += 1
             
     return f"Sent {reminded_count} {reminder_type} reminders."
+
+
+@shared_task
+def send_longitudinal_milestone_reminders():
+    """
+    Identifies participants who are due for longitudinal milestones
+    and dispatches a notification/reminder to them.
+    """
+    from django.contrib.auth import get_user_model
+    from notifications.models import Notification
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    User = get_user_model()
+    # Query chunking for KVM2 memory optimization
+    active_participants = User.objects.filter(
+        is_active=True, 
+        has_completed_baseline=True
+    ).iterator(chunk_size=1000)
+
+    reminded_count = 0
+    now = timezone.now()
+    today_date = now.date()
+
+    for user in active_participants:
+        due_milestone = user.get_due_milestone
+        
+        # We only remind for longitudinal post-baseline milestones
+        if due_milestone not in ['7_DAYS', '3_MONTHS', '6_MONTHS', '1_YEAR']:
+            continue
+
+        # Prevent double-reminding on the same day for the same milestone
+        reminder_sent_key = f"user_{user.user_id}_reminded_{due_milestone}_{today_date}"
+        if cache.get(reminder_sent_key):
+            continue
+
+        # Map milestone to custom reminder message
+        milestone_labels = {
+            '7_DAYS': '7-day post-test',
+            '3_MONTHS': '3-month follow-up',
+            '6_MONTHS': '6-month follow-up',
+            '1_YEAR': '1-year follow-up',
+        }
+        label = milestone_labels.get(due_milestone, 'follow-up')
+        msg = f"Hello! Your {label} assessment is now due. Please complete it today!"
+
+        n = Notification.objects.create(
+            user=user,
+            n_type='email',
+            message=msg,
+            scheduled_time=now,
+            status='pending'
+        )
+        
+        send_notification.delay(n.id)
+
+        # Cache the sent status until end of the day (midnight) to prevent double sending
+        tomorrow = (now + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        timeout = int((tomorrow - now).total_seconds())
+        if timeout > 0:
+            cache.set(reminder_sent_key, True, timeout=timeout)
+
+        reminded_count += 1
+
+    return f"Sent {reminded_count} longitudinal milestone reminders."
