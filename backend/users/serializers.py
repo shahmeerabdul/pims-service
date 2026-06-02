@@ -20,11 +20,10 @@ class UserSerializer(serializers.ModelSerializer):
             'whatsapp_number', 'date_of_birth', 'role', 'role_name', 
             'group', 'group_name', 'traits', 'created_at',
             'has_completed_sociodemographic',
-            'has_completed_baseline',
             'has_completed_posttest', 'is_posttest_due',
             'completion_rate',
         )
-        read_only_fields = ('created_at', 'has_completed_sociodemographic', 'has_completed_baseline', 'has_completed_posttest', 'is_posttest_due', 'completion_rate',)
+        read_only_fields = ('created_at', 'has_completed_sociodemographic', 'has_completed_posttest', 'is_posttest_due', 'completion_rate',)
 
 class SignupSerializer(serializers.ModelSerializer):
     """
@@ -148,7 +147,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'date_of_birth': dob_str,
             'role': self.user.role.name if self.user.role else 'Participant',
             'has_completed_sociodemographic': self.user.has_completed_sociodemographic,
-            'has_completed_baseline': self.user.has_completed_baseline,
             'has_completed_posttest': self.user.has_completed_posttest,
             'is_posttest_due': self.user.is_posttest_due,
         }

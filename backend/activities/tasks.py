@@ -18,9 +18,9 @@ def sync_user_experiment_state(user_id):
         user = User.objects.get(pk=user_id)
         
         # 1. Sync current experiment day
-        if user.baseline_completed_at:
+        if user.onboarding_completed_at:
             now = timezone.now()
-            delta = now.date() - user.baseline_completed_at.date()
+            delta = now.date() - user.onboarding_completed_at.date()
             exp_day = delta.days + 1
             
             cache_key_day = f"user_{user.user_id}_exp_day"

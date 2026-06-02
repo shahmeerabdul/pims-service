@@ -13,7 +13,6 @@ const OnboardingGuard: React.FC<OnboardingGuardProps> = ({ children, requireAdmi
   const isAuthenticated = !!localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
   const hasCompletedSociodemographic = localStorage.getItem('has_completed_sociodemographic') === 'true';
-  const hasCompletedBaseline = localStorage.getItem('has_completed_baseline') === 'true';
 
   if (!isAuthenticated) {
     // Redirect to login but save the current location they were trying to access
@@ -38,17 +37,9 @@ const OnboardingGuard: React.FC<OnboardingGuardProps> = ({ children, requireAdmi
     if (!isAllowedPath) {
       return <Navigate to="/sociodemographic" replace />;
     }
-  } else if (!hasCompletedBaseline) {
-    // allow access to /baseline-scales AND active questionnaire IDs
-    const isAllowedPath = location.pathname === '/baseline-scales' || 
-                         location.pathname.startsWith('/questionnaire/');
-                         
-    if (!isAllowedPath) {
-      return <Navigate to="/baseline-scales" replace />;
-    }
   } else {
-    // If they HAVE finished the baseline, they shouldn't be on the onboarding pages anymore
-    if (location.pathname === '/sociodemographic' || location.pathname === '/baseline-scales' || location.pathname === '/baseline-questionnaire') {
+    // If they HAVE finished onboarding, they shouldn't be on the onboarding pages anymore
+    if (location.pathname === '/sociodemographic') {
       return <Navigate to="/dashboard" replace />;
     }
   }

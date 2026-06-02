@@ -16,8 +16,8 @@ def timeline_setup(db, test_phase):
         group = Group.objects.create(name="Timeline Group")
         user = User.objects.create_user(
             username="timeline_user", email="tl@test.com", password="pwd",
-            group=group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now()
+            group=group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now()
         )
         # Create activities for Day 1 and Day 2
         act1 = Activity.objects.create(
@@ -79,7 +79,7 @@ class TestTimelineAndCaching:
         assert cache.get(cache_key) == 1
         
         # Manually change the date in DB but keep cache - should still return 1
-        user.baseline_completed_at = user.baseline_completed_at - timedelta(days=5)
+        user.onboarding_completed_at = user.onboarding_completed_at - timedelta(days=5)
         user.save()
         
         assert user.current_experiment_day == 1 # Hits cache
@@ -91,7 +91,7 @@ class TestTimelineAndCaching:
         
         # Travel to Day 3
         three_days_ago = timezone.now() - timedelta(days=2)
-        user.baseline_completed_at = three_days_ago
+        user.onboarding_completed_at = three_days_ago
         user.save()
         cache.clear() # Ensure clean state
 

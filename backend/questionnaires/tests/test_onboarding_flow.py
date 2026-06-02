@@ -47,14 +47,14 @@ def _create_test_scales():
 def test_user_onboarding_default_state(fresh_user):
     """Verify newly created users have onboarding flags set to False and no group assigned."""
     assert fresh_user.has_completed_sociodemographic is False
-    assert fresh_user.has_completed_baseline is False
+    assert fresh_user.has_completed_sociodemographic is False
     assert fresh_user.group is None
 
 @pytest.mark.django_db
-def test_sociodemographic_submission_only(fresh_client, fresh_user, test_group):
+def test_sociodemographic_submission_completes_onboarding(fresh_client, fresh_user, test_group):
     """
-    Submitting the sociodemographic questionnaire sets the sociodemographic flag,
-    but does NOT trigger group assignment or mark baseline complete.
+    Submitting the sociodemographic questionnaire completes onboarding,
+    triggers group assignment, and sets onboarding_completed_at.
     """
     # Ensure there is an active group in database
     test_group.is_active = True
@@ -82,43 +82,51 @@ def test_sociodemographic_submission_only(fresh_client, fresh_user, test_group):
 
     fresh_user.refresh_from_db()
     assert fresh_user.has_completed_sociodemographic is True
-    assert fresh_user.has_completed_baseline is False
-    assert fresh_user.group is None  # Defer assignment until psychometrics scales too
+    assert fresh_user.onboarding_completed_at is not None
+    assert fresh_user.group is not None  # Assigned to group immediately
+    assert fresh_user.group.is_active is True
 
 @pytest.mark.django_db
-def test_two_step_onboarding_success(fresh_client, fresh_user, test_group):
+def test_sociodemographic_disqualification(fresh_client, fresh_user, test_group):
     """
-    Submitting BOTH sociodemographics and signup scales completes baseline,
-    assigns group, and sets baseline timestamps.
+    Submitting a sociodemographic response set with a disqualifying answer
+    marks the user as disqualified and does NOT assign a group or complete onboarding.
     """
-    # Ensure there is an active group in database
     test_group.is_active = True
     test_group.save()
 
-    socio, q_socio, opt_socio, battery, q_battery, opt_battery = _create_test_scales()
+    # Create socio form
+    socio = Questionnaire.objects.create(
+        title="Socio Form",
+        assessment_type='SOCIODEMOGRAPHIC',
+        is_active=True
+    )
+    q_socio = Question.objects.create(questionnaire=socio, content="Are you eligible?", type="CHOICE", order=1)
+    # A label containing DISQUALIFY
+    opt_disqualify = Option.objects.create(question=q_socio, label="No (DISQUALIFY)", numeric_value=0, order=1)
 
-    # 1. Complete sociodemographics
-    rs_socio = ResponseSet.objects.create(user=fresh_user, questionnaire=socio, milestone='SIGNUP', status='DRAFT')
-    url_socio = reverse('response_set_submit', kwargs={'pk': rs_socio.pk})
-    payload_socio = {
-        "responses_data": [{"question_id": q_socio.id, "selected_option_id": opt_socio.id}]
-    }
-    fresh_client.post(url_socio, payload_socio, format='json')
+    rs = ResponseSet.objects.create(
+        user=fresh_user,
+        questionnaire=socio,
+        milestone='SIGNUP',
+        status='DRAFT'
+    )
 
-    # 2. Complete psychometric scales for SIGNUP milestone
-    rs_battery = ResponseSet.objects.create(user=fresh_user, questionnaire=battery, milestone='SIGNUP', status='DRAFT')
-    url_battery = reverse('response_set_submit', kwargs={'pk': rs_battery.pk})
-    payload_battery = {
-        "responses_data": [{"question_id": q_battery.id, "selected_option_id": opt_battery.id}]
+    url = reverse('response_set_submit', kwargs={'pk': rs.pk})
+    payload = {
+        "responses_data": [
+            {"question_id": q_socio.id, "selected_option_id": opt_disqualify.id}
+        ]
     }
-    response = fresh_client.post(url_battery, payload_battery, format='json')
+    
+    response = fresh_client.post(url, payload, format='json')
     assert response.status_code == status.HTTP_200_OK
 
     fresh_user.refresh_from_db()
-    assert fresh_user.has_completed_sociodemographic is True
-    assert fresh_user.has_completed_baseline is True
-    assert fresh_user.baseline_completed_at is not None
-    assert fresh_user.group is not None
+    assert fresh_user.is_disqualified is True
+    assert fresh_user.disqualification_reason != ""
+    assert fresh_user.has_completed_sociodemographic is False
+    assert fresh_user.group is None
 
 @pytest.mark.django_db
 def test_7_days_milestone_completion_marks_posttest(fresh_client, fresh_user):

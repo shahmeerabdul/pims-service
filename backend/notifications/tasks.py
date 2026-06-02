@@ -48,7 +48,7 @@ def check_and_send_daily_reminders(reminder_type='morning'):
     
     # Find active participants who haven't finished baseline yet OR have finished it but haven't submitted today
     # (Actually, users only start daily tasks AFTER baseline)
-    participants = User.objects.filter(has_completed_baseline=True, is_active=True)
+    participants = User.objects.filter(has_completed_sociodemographic=True, is_active=True)
     
     reminded_count = 0
     for user in participants:
@@ -93,7 +93,7 @@ def send_longitudinal_milestone_reminders():
     # Query chunking for KVM2 memory optimization
     active_participants = User.objects.filter(
         is_active=True, 
-        has_completed_baseline=True
+        has_completed_sociodemographic=True
     ).iterator(chunk_size=1000)
 
     reminded_count = 0

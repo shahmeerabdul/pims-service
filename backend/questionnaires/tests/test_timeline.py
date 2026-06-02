@@ -30,8 +30,7 @@ def fresh_user(db, participant_role):
         email='fresh@test.com',
         password='password123',
         role=participant_role,
-        has_completed_sociodemographic=False,
-        has_completed_baseline=False
+        has_completed_sociodemographic=False
     )
 
 @pytest.fixture
@@ -42,8 +41,7 @@ def onboarded_user(db, participant_role):
         password='password123',
         role=participant_role,
         has_completed_sociodemographic=True,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now()
+        onboarding_completed_at=timezone.now()
     )
 
 @pytest.fixture
@@ -62,7 +60,7 @@ class TestTimelineScheduler:
 
     def test_timeline_milestones_due_sequence(self, onboarded_user, questionnaire):
         base_time = timezone.now()
-        onboarded_user.baseline_completed_at = base_time
+        onboarded_user.onboarding_completed_at = base_time
         onboarded_user.save()
 
         # Day 0: None is due
@@ -162,7 +160,7 @@ class TestTimelineScheduler:
 
     def test_cache_invalidation_on_submission(self, api_client, onboarded_user, questionnaire):
         base_time = timezone.now()
-        onboarded_user.baseline_completed_at = base_time
+        onboarded_user.onboarding_completed_at = base_time
         onboarded_user.save()
 
         with freeze_time(base_time + timedelta(days=7)):
@@ -201,7 +199,7 @@ class TestTimelineScheduler:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['due_milestone'] is None
 
-        base_time = onboarded_user.baseline_completed_at
+        base_time = onboarded_user.onboarding_completed_at
         cache.clear()
         with freeze_time(base_time + timedelta(days=7)):
             response = api_client.get(url)
@@ -216,11 +214,11 @@ class TestTimelineScheduler:
 
 @pytest.mark.django_db
 def test_milestone_availability_by_timeline_delta(authenticated_client, test_user):
-    # Mock baseline_completed_at to 91 days ago.
+    # Mock onboarding_completed_at to 91 days ago.
     test_user.has_completed_sociodemographic = True
-    test_user.has_completed_baseline = True
+    test_user.has_completed_sociodemographic = True
     test_user.has_completed_posttest = True  # Complete the 7_DAYS milestone
-    test_user.baseline_completed_at = timezone.now() - timedelta(days=91)
+    test_user.onboarding_completed_at = timezone.now() - timedelta(days=91)
     test_user.save()
 
     # Clear cache to ensure clean test run

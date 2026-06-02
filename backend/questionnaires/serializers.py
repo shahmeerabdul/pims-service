@@ -18,7 +18,7 @@ class QuestionnaireSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Questionnaire
-        fields = ['id', 'title', 'description', 'is_active', 'is_baseline', 'is_posttest', 'assessment_type', 'max_completion_time', 'questions']
+        fields = ['id', 'title', 'description', 'is_active', 'is_posttest', 'assessment_type', 'max_completion_time', 'questions']
 
 class ResponseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -147,7 +147,7 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
             instance.completed_at = timezone.now()
             instance.save()
 
-            # 4. Handle Onboarding Completions (Sociodemographic & Signup Psychometrics)
+            # 4. Handle Onboarding Completions (Sociodemographic)
             user = instance.user
             if instance.questionnaire.assessment_type == 'SOCIODEMOGRAPHIC':
                 is_disqualified = False
@@ -161,28 +161,11 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
                     user.is_disqualified = True
                     user.disqualification_reason = "Answered YES to eligibility screener."
                     user.save(update_fields=['is_disqualified', 'disqualification_reason'])
-                
-                user.has_completed_sociodemographic = True
-                user.save(update_fields=['has_completed_sociodemographic'])
-
-            # Query if they have completed the signup psychometric scales
-            has_signup_scales = ResponseSet.objects.filter(
-                user=user,
-                questionnaire__assessment_type='PSYCHOMETRIC',
-                milestone='SIGNUP',
-                status='COMPLETED'
-            ).exists()
-
-            # Backward compatibility check for is_baseline flag
-            is_legacy_baseline = instance.questionnaire.is_baseline
-
-            if not getattr(user, 'is_disqualified', False):
-                if (user.has_completed_sociodemographic and has_signup_scales) or is_legacy_baseline:
-                    if not user.has_completed_baseline:
-                        assign_user_to_group(user)
-                        user.has_completed_baseline = True
-                        user.baseline_completed_at = timezone.now()
-                        user.save(update_fields=['has_completed_baseline', 'baseline_completed_at'])
+                else:
+                    assign_user_to_group(user)
+                    user.has_completed_sociodemographic = True
+                    user.onboarding_completed_at = timezone.now()
+                    user.save(update_fields=['has_completed_sociodemographic', 'onboarding_completed_at'])
 
             # 5. Mark post-test completed if milestone is '7_DAYS' or is_legacy_posttest
             is_legacy_posttest = instance.questionnaire.is_posttest

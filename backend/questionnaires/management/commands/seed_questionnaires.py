@@ -20,7 +20,7 @@ class Command(BaseCommand):
             title=q_title,
             description="A comprehensive initial assessment to determine experimental group eligibility and capture baseline psychometric data.",
             is_active=True,
-            is_baseline=True
+            assessment_type='SOCIODEMOGRAPHIC'
         )
 
         # 3. Define Questions

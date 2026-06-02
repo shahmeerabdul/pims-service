@@ -19,8 +19,8 @@ def test_setup(db, test_phase):
         group = Group.objects.create(name="Gratitude", description="Test")
         user = User.objects.create_user(
             username="daily_user", email="daily@test.com", password="pwd",
-            group=group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now()
+            group=group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now()
         )
         activity = Activity.objects.create(
             title="Gratitude Reflection",
@@ -45,8 +45,8 @@ class TestDailyActivities:
         group = Group.objects.create(name=f"Group_{uid}")
         user = User.objects.create_user(
             username=f"user_{uid}", email=f"user_{uid}@test.com", password="pwd",
-            group=group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now()
+            group=group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now()
         )
         activity = Activity.objects.create(
             title=f"Activity_{uid}", group=group, activity_type="paragraph",
@@ -132,7 +132,7 @@ class TestDailyActivities:
         Verify that submitting again on the same day updates the existing record.
         """
         user, group, activity = self.create_context(test_phase)
-        user.baseline_completed_at = datetime(2026, 5, 1, 0, 0, tzinfo=dt_timezone.utc)
+        user.onboarding_completed_at = datetime(2026, 5, 1, 0, 0, tzinfo=dt_timezone.utc)
         user.save()
         
         api_client.force_authenticate(user=user)

@@ -102,8 +102,8 @@ def test_full_7_day_journey(test_phase):
     base_time = timezone.now()
     user = User.objects.create_user(
         username="journey_user", email="journey@test.com", password="pwd",
-        group=group, has_completed_baseline=True,
-        baseline_completed_at=base_time
+        group=group, has_completed_sociodemographic=True,
+        onboarding_completed_at=base_time
     )
 
     client = APIClient()

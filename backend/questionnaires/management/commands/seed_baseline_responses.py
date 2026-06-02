@@ -33,7 +33,7 @@ class Command(BaseCommand):
 
         for user in participants:
             # GUARD: Do not overwrite realistic date/state for existing users who already completed baseline
-            if user.has_completed_baseline and user.baseline_completed_at:
+            if user.has_completed_sociodemographic and user.onboarding_completed_at:
                 continue
 
             # Generate realistic phone number if not present
@@ -42,11 +42,11 @@ class Command(BaseCommand):
 
             # Ensure they completed both
             user.has_completed_sociodemographic = True
-            user.has_completed_baseline = True
+            user.has_completed_sociodemographic = True
             
             completion_time = timezone.now() - timedelta(days=random.randint(1, 7), hours=random.randint(0, 23))
             start_time = completion_time - timedelta(minutes=random.randint(5, 15))
-            user.baseline_completed_at = completion_time
+            user.onboarding_completed_at = completion_time
             user.save()
 
             # Seed Sociodemographic ResponseSet (no milestone required for socio)

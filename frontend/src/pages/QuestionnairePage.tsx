@@ -48,13 +48,19 @@ const QuestionnairePage: React.FC = () => {
           setResponses(restored);
         }
       } catch (err: any) {
-        setError(err.response?.data?.detail || 'Failed to initialize questionnaire session.');
+        const detail = err.response?.data?.detail;
+        if (detail && detail.includes('already completed the sociodemographic')) {
+          localStorage.setItem('has_completed_sociodemographic', 'true');
+          navigate('/dashboard', { replace: true });
+        } else {
+          setError(detail || 'Failed to initialize questionnaire session.');
+        }
       } finally {
         setLoading(false);
       }
     };
     initSession();
-  }, [id]);
+  }, [id, navigate]);
 
   const questions = questionnaire?.questions || [];
   const currentQuestion = questions[currentIndex];
@@ -106,31 +112,18 @@ const QuestionnairePage: React.FC = () => {
 
       await questionnairesApi.submitResponseSet(responseSetId, payload);
 
-      // Update Onboarding State
-      const queryParams = new URLSearchParams(window.location.search);
-      const milestone = queryParams.get('milestone');
-
       if (questionnaire?.assessment_type === 'SOCIODEMOGRAPHIC') {
         localStorage.setItem('has_completed_sociodemographic', 'true');
-      }
-
-      const hasCompletedSocio = localStorage.getItem('has_completed_sociodemographic') === 'true';
-      if (hasCompletedSocio && questionnaire?.assessment_type === 'PSYCHOMETRIC' && milestone === 'SIGNUP') {
-        localStorage.setItem('has_completed_baseline', 'true');
       }
 
       setCompleted(true);
 
       // Short delay for success experience before redirect
       setTimeout(() => {
-        if (questionnaire?.assessment_type === 'SOCIODEMOGRAPHIC') {
-          navigate('/baseline-scales', { replace: true });
-        } else {
-          navigate('/dashboard', {
-            state: { message: 'Assessment finalized.' },
-            replace: true
-          });
-        }
+        navigate('/dashboard', {
+          state: { message: 'Assessment finalized.' },
+          replace: true
+        });
       }, 3000);
     } catch (err: any) {
       setError('Failed to submit questionnaire. Please try again.');

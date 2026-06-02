@@ -7,8 +7,6 @@ from .views import (
     ResponseSetDetailView,
     ResponseSetSubmitView,
     ResponseSetSaveDraftView,
-    AdminBaselineResponseListView,
-    AdminBaselineResponseDetailView,
     AdminPosttestResponseListView,
     AdminPosttestResponseDetailView,
     DueMilestoneView
@@ -21,8 +19,6 @@ from .analytics_views import (
 
 urlpatterns = [
     # Admin & Research Data (Prioritized)
-    path('baselines/', AdminBaselineResponseListView.as_view(), name='admin_baseline_list'),
-    path('baselines/<uuid:pk>/', AdminBaselineResponseDetailView.as_view(), name='admin_baseline_detail'),
     path('posttests/', AdminPosttestResponseListView.as_view(), name='admin_posttest_list'),
     path('posttests/<uuid:pk>/', AdminPosttestResponseDetailView.as_view(), name='admin_posttest_detail'),
 

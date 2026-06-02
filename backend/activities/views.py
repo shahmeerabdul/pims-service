@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from .models import Activity, Submission
 from .serializers import ActivitySerializer, DailySubmissionSerializer, SubmissionSerializer
-from users.permissions import BaselineCompleted
+from users.permissions import OnboardingCompleted
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -126,7 +126,7 @@ class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Standard ViewSet for listing activities.
     """
-    permission_classes = [BaselineCompleted]
+    permission_classes = [OnboardingCompleted]
     queryset = Activity.objects.all()
     serializer_class = ActivitySerializer
 
@@ -134,7 +134,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     """
     Standard ViewSet for handling task submissions.
     """
-    permission_classes = [BaselineCompleted]
+    permission_classes = [OnboardingCompleted]
     serializer_class = SubmissionSerializer
 
     def get_queryset(self):

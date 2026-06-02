@@ -3,17 +3,17 @@ from users.models import User
 
 
 @pytest.mark.django_db
-def test_has_completed_baseline_default_is_false(test_user):
-    assert test_user.has_completed_baseline is False
+def test_has_completed_sociodemographic_default_is_false(test_user):
+    assert test_user.has_completed_sociodemographic is False
 
 
 @pytest.mark.django_db
-def test_has_completed_baseline_updates_to_true(test_user):
-    test_user.has_completed_baseline = True
-    test_user.save(update_fields=['has_completed_baseline'])
+def test_has_completed_sociodemographic_updates_to_true(test_user):
+    test_user.has_completed_sociodemographic = True
+    test_user.save(update_fields=['has_completed_sociodemographic'])
 
     test_user.refresh_from_db()
-    assert test_user.has_completed_baseline is True
+    assert test_user.has_completed_sociodemographic is True
 
 
 @pytest.mark.django_db
@@ -23,7 +23,7 @@ def test_new_user_starts_with_false(db):
         email="fresh@example.com",
         password="password123"
     )
-    assert user.has_completed_baseline is False
+    assert user.has_completed_sociodemographic is False
 
 @pytest.mark.django_db
 def test_completion_rate_caching(test_user):
@@ -33,8 +33,8 @@ def test_completion_rate_caching(test_user):
     from phases.models import Phase
 
     # Setup user in experiment
-    test_user.has_completed_baseline = True
-    test_user.baseline_completed_at = timezone.now() - timezone.timedelta(days=2) # Day 3
+    test_user.has_completed_sociodemographic = True
+    test_user.onboarding_completed_at = timezone.now() - timezone.timedelta(days=2) # Day 3
     test_user.save()
 
     phase = Phase.objects.create(
@@ -67,8 +67,8 @@ def test_current_experiment_day_caching(test_user):
     from django.utils import timezone
     from django.core.cache import cache
 
-    test_user.has_completed_baseline = True
-    test_user.baseline_completed_at = timezone.now() - timezone.timedelta(days=1) # Day 2
+    test_user.has_completed_sociodemographic = True
+    test_user.onboarding_completed_at = timezone.now() - timezone.timedelta(days=1) # Day 2
     test_user.save()
 
     cache_key = f"user_{test_user.user_id}_exp_day"

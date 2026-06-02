@@ -10,7 +10,6 @@ class Questionnaire(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
-    is_baseline = models.BooleanField(default=False, help_text="Defines if this questionnaire is the initial screening for group assignment")
     is_posttest = models.BooleanField(default=False, help_text="Defines if this questionnaire is the Day 7 post-test reassessment")
     ASSESSMENT_TYPES = (
         ('SOCIODEMOGRAPHIC', 'Sociodemographic Form'),

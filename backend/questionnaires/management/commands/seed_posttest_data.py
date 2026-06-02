@@ -55,8 +55,8 @@ class Command(BaseCommand):
                 defaults={
                     "email": f"{username}@example.com",
                     "role": role_participant,
-                    "has_completed_baseline": True,
-                    "baseline_completed_at": timezone.now() - timedelta(days=7 + i)
+                    "has_completed_sociodemographic": True,
+                    "onboarding_completed_at": timezone.now() - timedelta(days=7 + i)
                 }
             )
             if u_created:

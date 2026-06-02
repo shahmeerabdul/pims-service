@@ -1,11 +1,11 @@
 from rest_framework import generics, permissions
 from .models import Notification
 from .serializers import NotificationSerializer
-from users.permissions import BaselineCompleted
+from users.permissions import OnboardingCompleted
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
-    permission_classes = (permissions.IsAuthenticated, BaselineCompleted,)
+    permission_classes = (permissions.IsAuthenticated, OnboardingCompleted,)
 
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)

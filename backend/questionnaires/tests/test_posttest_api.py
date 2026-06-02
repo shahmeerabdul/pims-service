@@ -30,8 +30,8 @@ def day7_user(db, participant_role):
         email='day7@test.com',
         password='password123',
         role=participant_role,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now() - timedelta(days=7)
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=7),
     )
     return user
 
@@ -42,8 +42,8 @@ def early_user(db, participant_role):
         email='early@test.com',
         password='password123',
         role=participant_role,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now() - timedelta(days=3)
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=3),
     )
     return user
 

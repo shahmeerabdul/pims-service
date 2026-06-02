@@ -50,8 +50,7 @@ class User(AbstractUser):
 
     # Onboarding state
     has_completed_sociodemographic = models.BooleanField(default=False)
-    has_completed_baseline = models.BooleanField(default=False)
-    baseline_completed_at = models.DateTimeField(null=True, blank=True)
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
 
     # Post-test state (Day 7 reassessment)
     has_completed_posttest = models.BooleanField(default=False)
@@ -79,7 +78,7 @@ class User(AbstractUser):
         if getattr(self, 'is_disqualified', False):
             return None
 
-        if not self.baseline_completed_at:
+        if not self.onboarding_completed_at:
             return None
 
         cache_key = f"user_{self.user_id}_exp_day"
@@ -88,8 +87,8 @@ class User(AbstractUser):
             return cached_day
 
         now = timezone.now()
-        # Calculate days since baseline completion
-        delta = timezone.localdate() - timezone.localtime(self.baseline_completed_at).date()
+        # Calculate days since onboarding completion
+        delta = timezone.localdate() - timezone.localtime(self.onboarding_completed_at).date()
         exp_day = delta.days + 1
 
         # Cache until midnight
@@ -103,7 +102,7 @@ class User(AbstractUser):
     @property
     def is_posttest_due(self):
         """Returns True if the user has reached Day 7+ and hasn't completed the post-test."""
-        if not self.has_completed_baseline or self.has_completed_posttest:
+        if not self.has_completed_sociodemographic or self.has_completed_posttest:
             return False
         return self.current_experiment_day is not None and self.current_experiment_day >= 7
 
@@ -120,10 +119,10 @@ class User(AbstractUser):
             return None if cached_val == "NONE" else cached_val
 
         # If onboarding is incomplete, SIGNUP is due.
-        if not self.has_completed_sociodemographic or not self.has_completed_baseline:
+        if not self.has_completed_sociodemographic or not self.has_completed_sociodemographic:
             return 'SIGNUP'
 
-        if not self.baseline_completed_at:
+        if not self.onboarding_completed_at:
             return None
 
         # Fetch completed milestones to prevent double-serving
@@ -136,7 +135,7 @@ class User(AbstractUser):
             completed_milestones.add('7_DAYS')
 
         now = timezone.now()
-        delta = now.date() - self.baseline_completed_at.date()
+        delta = now.date() - self.onboarding_completed_at.date()
         days = delta.days
 
         due = None

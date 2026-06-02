@@ -18,7 +18,7 @@ interface Participant {
   full_name: string;
   username: string;
   submission_count: number;
-  has_completed_baseline: boolean;
+  has_completed_sociodemographic: boolean;
   current_experiment_day: number | null;
 }
 
@@ -164,7 +164,7 @@ const GroupDetailPage: React.FC = () => {
                </div>
                <div className="text-center">
                   <div className="text-3xl font-bold text-zinc-900">
-                    {Math.round((group.participants.filter(p => p.has_completed_baseline).length / (group.member_count || 1)) * 100)}%
+                    {Math.round((group.participants.filter(p => p.has_completed_sociodemographic).length / (group.member_count || 1)) * 100)}%
                   </div>
                   <div className="text-xs text-zinc-400 font-medium mt-1 uppercase tracking-tight">Onboarding Health</div>
                </div>
@@ -224,7 +224,7 @@ const GroupDetailPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {p.has_completed_baseline ? (
+                        {p.has_completed_sociodemographic ? (
                            <div className="flex items-center gap-1.5 text-zinc-700 text-xs font-semibold">
                               <CheckCircle2 size={14} className="text-zinc-400" /> Terminal Ready
                            </div>

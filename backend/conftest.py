@@ -40,7 +40,7 @@ def baseline_user(db, test_group):
         email="baseline@example.com",
         password="password123",
         group=test_group,
-        has_completed_baseline=True
+        has_completed_sociodemographic=True
     )
     return user
 

@@ -58,11 +58,11 @@ class ResponseSetListCreateView(generics.ListCreateAPIView):
             serializer = self.get_serializer(existing_set)
             return DRFResponse(serializer.data, status=status.HTTP_200_OK)
             
-        # If it's a baseline and they already completed it (not just draft), block it
+        # If they already completed it (not just draft), block it based on assessment type logic
         try:
             q_obj = Questionnaire.objects.get(id=questionnaire_id)
-            if q_obj.is_baseline and user.has_completed_baseline:
-                raise ValidationError({"detail": "You have already completed the baseline assessment."})
+            if q_obj.assessment_type == 'SOCIODEMOGRAPHIC' and user.has_completed_sociodemographic:
+                raise ValidationError({"detail": "You have already completed the sociodemographic assessment."})
             if q_obj.is_posttest:
                 if not user.is_posttest_due:
                     raise ValidationError({"detail": "Post-test is not available yet. Complete 7 days first."})
@@ -144,35 +144,6 @@ class ResponseSetSaveDraftView(generics.UpdateAPIView):
 
     def post(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
-
-class AdminBaselineResponseListView(generics.ListAPIView):
-    """
-    Researcher-only view to list all completed baseline assessments.
-    """
-    serializer_class = AdminResponseSetSerializer
-    permission_classes = (permissions.IsAdminUser,)
-    pagination_class = StandardResultsSetPagination
-
-    def get_queryset(self):
-        return ResponseSet.objects.filter(
-            questionnaire__is_baseline=True,
-            status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
-
-class AdminBaselineResponseDetailView(generics.RetrieveAPIView):
-    """
-    Researcher-only view to inspect a specific baseline submission.
-    """
-    serializer_class = AdminResponseSetSerializer
-    permission_classes = (permissions.IsAdminUser,)
-
-    def get_queryset(self):
-        return ResponseSet.objects.filter(
-            status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        )
 
 class AdminPosttestResponseListView(generics.ListAPIView):
     """

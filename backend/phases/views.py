@@ -2,16 +2,16 @@ from rest_framework import generics, permissions
 from .models import Phase
 from .serializers import PhaseSerializer
 from django.utils import timezone
-from users.permissions import BaselineCompleted
+from users.permissions import OnboardingCompleted
 
 class PhaseListView(generics.ListAPIView):
     queryset = Phase.objects.all()
     serializer_class = PhaseSerializer
-    permission_classes = (permissions.IsAuthenticated, BaselineCompleted,)
+    permission_classes = (permissions.IsAuthenticated, OnboardingCompleted,)
 
 class CurrentPhaseView(generics.RetrieveAPIView):
     serializer_class = PhaseSerializer
-    permission_classes = (permissions.IsAuthenticated, BaselineCompleted,)
+    permission_classes = (permissions.IsAuthenticated, OnboardingCompleted,)
 
     def get_object(self):
         today = timezone.localdate()

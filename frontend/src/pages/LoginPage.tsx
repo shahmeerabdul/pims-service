@@ -35,15 +35,13 @@ const LoginPage: React.FC = () => {
         localStorage.setItem('user_role', data.user.role);
         localStorage.setItem('user_full_name', data.user.full_name || data.user.username);
         localStorage.setItem('has_completed_sociodemographic', String(data.user.has_completed_sociodemographic));
-        localStorage.setItem('has_completed_baseline', String(data.user.has_completed_baseline));
+
         
         // Redirection based on role and onboarding status
         if (data.user.role === 'Admin') {
           window.location.href = '/admin';
         } else if (data.user.has_completed_sociodemographic === false) {
           window.location.href = '/sociodemographic';
-        } else if (data.user.has_completed_baseline === false) {
-          window.location.href = '/baseline-scales';
         } else {
           window.location.href = '/dashboard';
         }

@@ -12,7 +12,6 @@ const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const GroupsManagementPage = lazy(() => import('./pages/GroupsManagementPage'));
 const GroupDetailPage = lazy(() => import('./pages/GroupDetailPage'));
-const AdminBaselineResultsPage = lazy(() => import('./pages/AdminBaselineResultsPage'));
 const AdminPosttestResultsPage = lazy(() => import('./pages/AdminPosttestResultsPage'));
 const AdminSupportQueriesPage = lazy(() => import('./pages/AdminSupportQueriesPage'));
 const AdminLayout = lazy(() => import('./components/Admin/AdminLayout'));
@@ -20,7 +19,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ResultsPage = lazy(() => import('./pages/ResultsPage'));
 const QuestionnairePage = lazy(() => import('./pages/QuestionnairePage'));
 const AuthOnboardingGuard = lazy(() => import('./components/Auth/OnboardingGuard'));
-const BaselineRedirect = lazy(() => import('./components/Auth/BaselineRedirect'));
+const SociodemographicRedirect = lazy(() => import('./components/Auth/SociodemographicRedirect'));
 
 const App: React.FC = () => {
   // Helper to get fresh auth status
@@ -56,9 +55,7 @@ const App: React.FC = () => {
                 <Route path="/activity/:id" element={<ActivityPage />} />
                 <Route path="/results/:id" element={<ResultsPage />} />
                 <Route path="/questionnaire/:id" element={<QuestionnairePage />} />
-                <Route path="/baseline-questionnaire" element={<BaselineRedirect />} />
-                <Route path="/sociodemographic" element={<BaselineRedirect />} />
-                <Route path="/baseline-scales" element={<BaselineRedirect />} />
+                <Route path="/sociodemographic" element={<SociodemographicRedirect />} />
               </Route>
               
               {/* Admin Hub - Nested Routes with Sidebar Layout */}
@@ -66,7 +63,6 @@ const App: React.FC = () => {
                   <Route path="/admin" element={<AdminDashboardPage />} />
                   <Route path="/admin/groups" element={<GroupsManagementPage />} />
                   <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
-                 <Route path="/admin/baseline-data" element={<AdminBaselineResultsPage />} />
                  <Route path="/admin/posttest-data" element={<AdminPosttestResultsPage />} />
                  <Route path="/admin/support-queries" element={<AdminSupportQueriesPage />} />
               </Route>

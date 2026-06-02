@@ -28,6 +28,19 @@ const SociodemographicForm: React.FC<SociodemographicFormProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
+  useEffect(() => {
+    // Scroll to first unanswered question on mount (Resume from last completed item)
+    const firstUnanswered = questions.find(q => !initialResponses[q.id]);
+    if (firstUnanswered) {
+      setTimeout(() => {
+        const element = document.getElementById(`question-${firstUnanswered.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+  }, [questions, initialResponses]);
+
   // Split question content into English and Urdu
   const getBilingualText = (content: string) => {
     const parts = content.split('|').map(s => s.trim());
@@ -96,6 +109,7 @@ const SociodemographicForm: React.FC<SociodemographicFormProps> = ({
           return (
             <motion.div 
               key={question.id}
+              id={`question-${question.id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}

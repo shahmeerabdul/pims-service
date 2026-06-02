@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from .models import ExportTask
-from .tasks import generate_baseline_export_csv, generate_posttest_export_csv, generate_longitudinal_export_csv
+from .tasks import generate_posttest_export_csv, generate_longitudinal_export_csv
 from .serializers import ExportTaskSerializer
 from users.models import User
 from activities.models import Submission
@@ -37,28 +37,6 @@ class ExportDataCSVView(APIView):
             ])
 
         return response
-
-class ExportBaselineDataCSVView(APIView):
-    permission_classes = [IsAdminUser]
-
-    def post(self, request):
-        try:
-            group_name = request.data.get('group', 'All')
-            task = ExportTask.objects.create(
-                user=request.user,
-                filters={'group': group_name}
-            )
-            
-            # Trigger Celery Task
-            generate_baseline_export_csv.delay(task.id)
-            
-            return Response({
-                'task_id': task.id,
-                'status': task.status
-            }, status=202)
-        except Exception as e:
-            logger.error(f"Failed to trigger baseline export: {e}")
-            return Response({"detail": "Failed to initiate export process."}, status=500)
 
 class ExportPosttestDataCSVView(APIView):
     permission_classes = [IsAdminUser]

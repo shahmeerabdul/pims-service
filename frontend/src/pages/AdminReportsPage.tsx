@@ -57,7 +57,7 @@ const AdminReportsPage: React.FC = () => {
     if (exportingId && (exportStatus === 'PENDING' || exportStatus === 'PROCESSING')) {
       pollInterval = setInterval(async () => {
         try {
-          const response = await questionnairesApi.getAdminBaselineExportStatus(exportingId);
+          const response = await questionnairesApi.getAdminExportStatus(exportingId);
           const { status, file_url } = response.data;
           
           setExportStatus(status);

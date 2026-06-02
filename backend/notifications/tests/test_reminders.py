@@ -11,17 +11,17 @@ def participants(db, test_group):
     # User 1: Has completed baseline, hasn't submitted today
     u1 = User.objects.create_user(
         username="p1", email="p1@test.com", password="pwd", 
-        group=test_group, has_completed_baseline=True
+        group=test_group, has_completed_sociodemographic=True
     )
     # User 2: Has completed baseline, ALREADY submitted today
     u2 = User.objects.create_user(
         username="p2", email="p2@test.com", password="pwd", 
-        group=test_group, has_completed_baseline=True
+        group=test_group, has_completed_sociodemographic=True
     )
     # User 3: Has NOT completed baseline (should not be reminded of daily tasks)
     u3 = User.objects.create_user(
         username="p3", email="p3@test.com", password="pwd", 
-        group=test_group, has_completed_baseline=False
+        group=test_group, has_completed_sociodemographic=False
     )
     return u1, u2, u3
 
@@ -98,25 +98,22 @@ class TestLongitudinalReminders:
         # 1. User who completed baseline exactly 7 days ago (7_DAYS is due)
         u1 = User.objects.create_user(
             username="due_7_days", email="u1@test.com", password="pwd",
-            group=test_group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now() - timedelta(days=7),
-            has_completed_sociodemographic=True
+            group=test_group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now() - timedelta(days=7)
         )
 
         # 2. User who completed baseline 3 days ago (not due for anything yet)
         u2 = User.objects.create_user(
             username="not_due", email="u2@test.com", password="pwd",
-            group=test_group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now() - timedelta(days=3),
-            has_completed_sociodemographic=True
+            group=test_group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now() - timedelta(days=3)
         )
 
         # 3. User who completed baseline 90 days ago but already completed the 3_MONTHS milestone (and 7_DAYS milestone)
         u3 = User.objects.create_user(
             username="already_done_3m", email="u3@test.com", password="pwd",
-            group=test_group, has_completed_baseline=True,
-            baseline_completed_at=timezone.now() - timedelta(days=90),
-            has_completed_sociodemographic=True
+            group=test_group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now() - timedelta(days=90)
         )
         q = Questionnaire.objects.create(title="Battery", assessment_type="PSYCHOMETRIC")
         ResponseSet.objects.create(user=u3, questionnaire=q, status='COMPLETED', milestone='7_DAYS')

@@ -23,20 +23,7 @@ def test_admin_export_csv(admin_client, test_user):
     assert 'experiment_data_spss.csv' in response['Content-Disposition']
 
 
-@pytest.mark.django_db
-@patch('admin_tools.views.generate_baseline_export_csv.delay')
-def test_admin_export_baseline_csv(mock_delay, admin_client):
-    url = reverse('export_baseline_csv')
-    response = admin_client.post(url, {'group': 'All'})
 
-    assert response.status_code == status.HTTP_202_ACCEPTED
-    assert 'task_id' in response.data
-    assert response.data['status'] == 'PENDING'
-
-    task_id = response.data['task_id']
-    task = ExportTask.objects.get(id=task_id)
-    assert task.filters.get('group') == 'All'
-    mock_delay.assert_called_once_with(task.id)
 
 
 @pytest.mark.django_db
@@ -84,16 +71,16 @@ def analytics_setup(db, admin_user, test_phase):
     from users.models import User
     user_a = User.objects.create_user(
         username='user_a', email='a@test.com', password='pass',
-        group=group_a, has_completed_baseline=True,
-        baseline_completed_at=timezone.now()
+        group=group_a, has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now()
     )
     user_b = User.objects.create_user(
         username='user_b', email='b@test.com', password='pass',
-        group=group_b, has_completed_baseline=True,
-        baseline_completed_at=timezone.now()
+        group=group_b, has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now()
     )
 
-    questionnaire = Questionnaire.objects.create(title='Baseline', is_baseline=True, is_active=True)
+    questionnaire = Questionnaire.objects.create(title='Baseline', assessment_type='SOCIODEMOGRAPHIC', is_active=True)
     rs_a = ResponseSet.objects.create(user=user_a, questionnaire=questionnaire, status='COMPLETED', completed_at=timezone.now())
     rs_b = ResponseSet.objects.create(user=user_b, questionnaire=questionnaire, status='COMPLETED', completed_at=timezone.now())
 
@@ -225,7 +212,7 @@ def test_dashboard_analytics_inactive_user(admin_client, analytics_setup):
     from users.models import User
     User.objects.create_user(
         username='inactive_user', email='inactive@test.com', password='pass',
-        group=analytics_setup['group_a'], has_completed_baseline=False
+        group=analytics_setup['group_a'], has_completed_sociodemographic=False
     )
     url = reverse('dashboard_analytics')
     response = admin_client.get(url)
@@ -318,9 +305,8 @@ def test_generate_longitudinal_export_csv_task(admin_user, test_group):
     from users.models import User
     user = User.objects.create_user(
         username="participant", email="p@example.com", password="password",
-        group=test_group, has_completed_baseline=True,
-        baseline_completed_at=timezone.now(),
-        has_completed_sociodemographic=True
+        group=test_group, has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now(),
     )
 
     # 4. Create completed response sets
@@ -364,76 +350,7 @@ def test_generate_longitudinal_export_csv_task(admin_user, test_group):
     assert "10 - Completely" in csv_content
 
 
-@pytest.mark.django_db
-def test_generate_baseline_export_csv_task(admin_user, test_group):
-    from admin_tools.tasks import generate_baseline_export_csv
-    from questionnaires.models import Questionnaire, Question, Option, ResponseSet, Response
-    from django.utils import timezone
 
-    # 1. Create a sociodemographic questionnaire and questions
-    socio_q = Questionnaire.objects.create(
-        title="Socio Survey", assessment_type='SOCIODEMOGRAPHIC', is_active=True
-    )
-    gender_q = Question.objects.create(
-        questionnaire=socio_q, content="What is your gender?", type="CHOICE", order=1
-    )
-    opt_male = Option.objects.create(question=gender_q, label="Male", numeric_value=1, order=1)
-
-    # 2. Create a psychometric questionnaire and questions
-    psy_q = Questionnaire.objects.create(
-        title="Battery", assessment_type='PSYCHOMETRIC', is_active=True
-    )
-    perma_q = Question.objects.create(
-        questionnaire=psy_q, content="[PERMA] Feel joyful?", type="SCALE", order=1
-    )
-    opt_joy = Option.objects.create(question=perma_q, label="10 - Completely", numeric_value=10, order=10)
-
-    # 3. Create a participant user who completed baseline
-    from users.models import User
-    user = User.objects.create_user(
-        username="baseline_participant", email="bp@example.com", password="password",
-        group=test_group, has_completed_baseline=True,
-        baseline_completed_at=timezone.now(),
-        has_completed_sociodemographic=True,
-        whatsapp_number="123456789"
-    )
-
-    # 4. Create completed response sets
-    rs_socio = ResponseSet.objects.create(user=user, questionnaire=socio_q, status='COMPLETED')
-    Response.objects.create(response_set=rs_socio, question=gender_q, selected_option=opt_male)
-
-    rs_signup = ResponseSet.objects.create(user=user, questionnaire=psy_q, status='COMPLETED', milestone='SIGNUP')
-    Response.objects.create(response_set=rs_signup, question=perma_q, selected_option=opt_joy)
-
-    # 5. Trigger the export task
-    task = ExportTask.objects.create(user=admin_user, filters={'group': 'All'})
-    generate_baseline_export_csv(task.id)
-
-    # 6. Verify task succeeded and file is saved
-    task.refresh_from_db()
-    assert task.status == 'SUCCESS'
-    assert task.file is not None
-
-    # Read and assert file content
-    csv_content = task.file.read().decode('utf-8')
-    import csv
-    import io
-    reader = csv.reader(io.StringIO(csv_content))
-    rows = list(reader)
-
-    # Check Headers
-    headers = rows[0]
-    assert 'ParticipantID' in headers
-    assert 'WhatsAppNumber' in headers
-    assert 'Socio_Gender' in headers
-    assert 'PERMA_Q1_SIGNUP' in headers
-
-    # Check Data Row
-    data_row = rows[1]
-    assert data_row[0] == str(user.user_id)
-    assert data_row[2] == "123456789"
-    assert "Male" in csv_content
-    assert "10 - Completely" in csv_content
 
 
 @pytest.mark.django_db
@@ -454,7 +371,7 @@ def test_generate_posttest_export_csv_task(admin_user, test_group):
     from users.models import User
     user = User.objects.create_user(
         username="posttest_participant", email="pp@example.com", password="password",
-        group=test_group, has_completed_baseline=True
+        group=test_group, has_completed_sociodemographic=True
     )
 
     # 3. Create completed response set for 7_DAYS milestone

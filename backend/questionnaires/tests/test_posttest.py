@@ -16,8 +16,6 @@ def participant_role(db):
 def baseline_questionnaire(db):
     q = Questionnaire.objects.create(
         title='Baseline Assessment',
-        description='Initial screening',
-        is_baseline=True,
         is_active=True,
     )
     question = Question.objects.create(
@@ -44,14 +42,14 @@ def posttest_questionnaire(db):
 
 @pytest.fixture
 def user_before_day7(db, participant_role):
-    """User who completed baseline but hasn't reached Day 7."""
+    """User who completed onboarding but hasn't reached Day 7."""
     user = User.objects.create_user(
         username='early_user',
         email='early@test.com',
         password='testpass123',
         role=participant_role,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now() - timedelta(days=3),
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=3),
     )
     return user
 
@@ -64,8 +62,8 @@ def user_at_day7(db, participant_role):
         email='day7@test.com',
         password='testpass123',
         role=participant_role,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now() - timedelta(days=7),
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=7),
     )
     return user
 
@@ -78,8 +76,8 @@ def user_posttest_done(db, participant_role):
         email='done@test.com',
         password='testpass123',
         role=participant_role,
-        has_completed_baseline=True,
-        baseline_completed_at=timezone.now() - timedelta(days=10),
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=10),
         has_completed_posttest=True,
         posttest_completed_at=timezone.now() - timedelta(days=2),
     )
@@ -114,7 +112,7 @@ def test_posttest_not_due_without_baseline(db, participant_role):
         email='nobase@test.com',
         password='testpass123',
         role=participant_role,
-        has_completed_baseline=False,
+        has_completed_sociodemographic=False,
     )
     assert user.is_posttest_due is False
 
