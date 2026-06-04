@@ -101,10 +101,10 @@ class User(AbstractUser):
 
     @property
     def is_posttest_due(self):
-        """Returns True if the user has reached Day 7+ and hasn't completed the post-test."""
+        """Returns True if the user has reached Day 8+ (7 days after onboarding completion) and hasn't completed the post-test."""
         if not self.has_completed_sociodemographic or self.has_completed_posttest:
             return False
-        return self.current_experiment_day is not None and self.current_experiment_day >= 7
+        return self.current_experiment_day is not None and self.current_experiment_day >= 8
 
     @property
     def get_due_milestone(self):
@@ -139,7 +139,7 @@ class User(AbstractUser):
 
         # Evaluate timeline sequentially
         if '7_DAYS' not in completed_milestones:
-            if self.current_experiment_day is not None and self.current_experiment_day >= 7:
+            if self.current_experiment_day is not None and self.current_experiment_day >= 8:
                 due = '7_DAYS'
         else:
             # Find T1 completion time

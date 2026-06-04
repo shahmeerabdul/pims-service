@@ -72,7 +72,12 @@ class TestTimelineScheduler:
         with freeze_time(base_time + timedelta(days=5)):
             assert onboarded_user.get_due_milestone is None
 
-        # Day 7: 7_DAYS is due
+        # Day 6 (Experiment Day 7): None is due yet
+        cache.clear()
+        with freeze_time(base_time + timedelta(days=6)):
+            assert onboarded_user.get_due_milestone is None
+
+        # Day 7 (Experiment Day 8): 7_DAYS is due
         cache.clear()
         with freeze_time(base_time + timedelta(days=7)):
             assert onboarded_user.get_due_milestone == '7_DAYS'
