@@ -53,20 +53,19 @@ def test_user_onboarding_default_state(fresh_user):
 @pytest.mark.django_db
 def test_sociodemographic_submission_completes_onboarding(fresh_client, fresh_user, test_group):
     """
-    Submitting the sociodemographic questionnaire completes onboarding,
-    triggers group assignment, and sets onboarding_completed_at.
+    Submitting the sociodemographic questionnaire completed sociodemographic status,
+    and then submitting the baseline psychometrics completes onboarding, setting onboarding_completed_at.
     """
     # Ensure there is an active group in database
     test_group.is_active = True
     test_group.save()
 
-    socio, q_socio, opt_socio, _, _, _ = _create_test_scales()
+    socio, q_socio, opt_socio, battery, q_battery, opt_battery = _create_test_scales()
 
-    # Create response set for socio
+    # 1. Create and submit response set for socio
     rs = ResponseSet.objects.create(
         user=fresh_user,
         questionnaire=socio,
-        milestone='SIGNUP',
         status='DRAFT'
     )
 
@@ -82,9 +81,30 @@ def test_sociodemographic_submission_completes_onboarding(fresh_client, fresh_us
 
     fresh_user.refresh_from_db()
     assert fresh_user.has_completed_sociodemographic is True
-    assert fresh_user.onboarding_completed_at is not None
+    assert fresh_user.onboarding_completed_at is None  # Onboarding is NOT complete yet
     assert fresh_user.group is not None  # Assigned to group immediately
     assert fresh_user.group.is_active is True
+
+    # 2. Create and submit baseline psychometrics (SIGNUP milestone)
+    rs_battery = ResponseSet.objects.create(
+        user=fresh_user,
+        questionnaire=battery,
+        milestone='SIGNUP',
+        status='DRAFT'
+    )
+
+    url_battery = reverse('response_set_submit', kwargs={'pk': rs_battery.pk})
+    payload_battery = {
+        "responses_data": [
+            {"question_id": q_battery.id, "selected_option_id": opt_battery.id}
+        ]
+    }
+
+    response2 = fresh_client.post(url_battery, payload_battery, format='json')
+    assert response2.status_code == status.HTTP_200_OK
+
+    fresh_user.refresh_from_db()
+    assert fresh_user.onboarding_completed_at is not None  # Now onboarding is fully complete
 
 @pytest.mark.django_db
 def test_sociodemographic_disqualification(fresh_client, fresh_user, test_group):

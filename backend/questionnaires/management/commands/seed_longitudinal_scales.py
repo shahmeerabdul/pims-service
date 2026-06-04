@@ -7,6 +7,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Seeding Longitudinal Scale Questionnaires...")
 
+        # Delete legacy questionnaires that are no longer used
+        self.stdout.write("Clearing legacy questionnaires...")
+        Questionnaire.objects.exclude(title__in=["Sociodemographic Survey", "Longitudinal Psychometric Scales"]).delete()
+
         # 1. Seed Sociodemographic Form
         socio_title = "Sociodemographic Survey"
         
@@ -100,11 +104,19 @@ class Command(BaseCommand):
 
         # 2. Seed Combined Longitudinal Psychometric Battery
         battery_title = "Longitudinal Psychometric Scales"
+        
+        # Always recreate the battery to update questions and options correctly
+        Questionnaire.objects.filter(title=battery_title).delete()
+        
+        # Ensure no other questionnaire is marked as the post-test to avoid conflicts
+        Questionnaire.objects.filter(is_posttest=True).update(is_posttest=False)
+        
         if not Questionnaire.objects.filter(title=battery_title).exists():
             battery_q = Questionnaire.objects.create(
                 title=battery_title,
                 description="Standardized psychological scales (PERMA + PHQ-9 + GAD-7 + PANAS + GQ-6 + SIDAS) administered at specific milestones.",
                 is_active=True,
+                is_posttest=True,
                 assessment_type='PSYCHOMETRIC'
             )
 
@@ -112,6 +124,25 @@ class Command(BaseCommand):
             scale_0_to_10 = [(f"{i}", i) for i in range(11)]
             scale_0_to_10[0] = ("0 - Not at all / Never", 0)
             scale_0_to_10[10] = ("10 - Completely / Always", 10)
+
+            opts_never_always = [(f"{i}", i) for i in range(11)]
+            opts_never_always[0] = ("0 - Never | کبھی نہیں", 0)
+            opts_never_always[10] = ("10 - Always | ہمیشہ", 10)
+
+            opts_terrible_excellent = [(f"{i}", i) for i in range(11)]
+            opts_terrible_excellent[0] = ("0 - Terrible | انتہائی خراب", 0)
+            opts_terrible_excellent[10] = ("10 - Excellent | بہترین", 10)
+
+            opts_notatall_completely = [(f"{i}", i) for i in range(11)]
+            opts_notatall_completely[0] = ("0 - Not at all | بالکل بھی نہیں", 0)
+            opts_notatall_completely[10] = ("10 - Completely | مکمل طور پر", 10)
+
+            phq_options = [
+                ("0 - Not at all | بالکل نہیں", 0),
+                ("1 - Several days | کئی دن", 1),
+                ("2 - More than half the days | ایک ہفتے سے زیادہ", 2),
+                ("3 - Nearly every day | تقریباً روزانہ", 3)
+            ]
 
             phq_gad_options = [
                 ("0 - Not at all", 0),
@@ -121,89 +152,517 @@ class Command(BaseCommand):
             ]
 
             panas_options = [
-                ("1 - Very slightly or not at all", 1),
-                ("2 - A little", 2),
-                ("3 - Moderately", 3),
-                ("4 - Quite a bit", 4),
-                ("5 - Extremely", 5)
+                ("0 - Very slightly or not at all | کبھی نہیں", 0),
+                ("1 - A little | بہت کم", 1),
+                ("2 - Moderately | درمیانہ", 2),
+                ("3 - Quite a bit | کافی حد تک", 3),
+                ("4 - Extremely | بہت زیادہ", 4)
             ]
 
-            gq6_options = [
-                ("1 - Strongly disagree", 1),
-                ("2", 2),
-                ("3", 3),
-                ("4 - Neutral", 4),
-                ("5", 5),
-                ("6", 6),
-                ("7 - Strongly agree", 7)
+            grat_options = [
+                ("0 - Completely disagree | بالکل غیر متفق", 0),
+                ("1 - Disagree | غیر متفق", 1),
+                ("2 - Neutral | غیر جانبدار", 2),
+                ("3 - Agree | متفق", 3),
+                ("4 - Completely agree | مکمل متفق", 4)
             ]
+
+            sidas_options_1 = [(f"{i}", i) for i in range(11)]
+            sidas_options_1[0] = ("0 - Never | کبھی نہیں", 0)
+            sidas_options_1[10] = ("10 - Always | ہمیشہ", 10)
+
+            sidas_options_2 = [(f"{i}", i) for i in range(11)]
+            sidas_options_2[0] = ("0 - No control | بالکل قابو نہیں", 0)
+            sidas_options_2[10] = ("10 - Full control | مکمل قابو", 10)
+
+            sidas_options_3 = [(f"{i}", i) for i in range(11)]
+            sidas_options_3[0] = ("0 - Not close at all | بالکل قریب نہیں", 0)
+            sidas_options_3[10] = ("10 - Made an attempt | ایک کوشش کی", 10)
+
+            sidas_options_4_5 = [(f"{i}", i) for i in range(11)]
+            sidas_options_4_5[0] = ("0 - Not at all | بالکل نہیں", 0)
+            sidas_options_4_5[10] = ("10 - Extremely | بہت زیادہ", 10)
 
             battery_data = [
-                # --- PERMA Profiler questions (Sample) ---
+                # --- 23-Item PERMA Profiler ---
                 {
-                    "content": "[PERMA] In general, how often do you feel joyful?",
+                    "content": "[PERMA] How much of the time do you feel you are making progress towards accomplishing your goals? | آپ کو کتنی بار لگتا ہے کہ آپ اپنے مقاصد کی طرف بڑھ رہے ہیں؟",
                     "type": "SCALE",
                     "order": 1,
-                    "options": scale_0_to_10
+                    "options": opts_never_always
                 },
                 {
-                    "content": "[PERMA] In general, how active and vigorous are you?",
+                    "content": "[PERMA] How often do you become absorbed in what you are doing? | آپ کتنی بار اپنے کام میں پوری طرح مشغول ہو جاتے ہیں؟",
                     "type": "SCALE",
                     "order": 2,
-                    "options": scale_0_to_10
+                    "options": opts_never_always
                 },
-                # --- PHQ-9 questions (Sample) ---
                 {
-                    "content": "[PHQ-9] Little interest or pleasure in doing things.",
+                    "content": "[PERMA] In general, how often do you feel joyful? | عام طور پر، آپ کتنی بار خوشگوار / خوشی محسوس کرتے ہیں؟",
                     "type": "SCALE",
                     "order": 3,
-                    "options": phq_gad_options
+                    "options": opts_never_always
                 },
                 {
-                    "content": "[PHQ-9] Feeling down, depressed, or hopeless.",
+                    "content": "[PERMA] In general, how often do you feel anxious? | عام طور پر، آپ کتنی باربے چین/  بے چینی محسوس کرتے ہیں؟",
                     "type": "SCALE",
                     "order": 4,
-                    "options": phq_gad_options
+                    "options": opts_never_always
                 },
-                # --- GAD-7 questions (Sample) ---
                 {
-                    "content": "[GAD-7] Feeling nervous, anxious or on edge.",
+                    "content": "[PERMA] How often do you achieve the important goals you have set for yourself? | کتنی بارآپ اپنے لیے مقرر کردہ اہم اہداف/ مقاصد کو حاصل کرتے ہیں؟",
                     "type": "SCALE",
                     "order": 5,
-                    "options": phq_gad_options
+                    "options": opts_never_always
                 },
                 {
-                    "content": "[GAD-7] Not being able to stop or control worrying.",
+                    "content": "[PERMA] In general, how would you say your health is? | عام طور پر، آپ اپنی صحت کو کیسا محسوس کرتے ہیں؟",
                     "type": "SCALE",
                     "order": 6,
-                    "options": phq_gad_options
+                    "options": opts_terrible_excellent
                 },
-                # --- PANAS questions (Sample) ---
                 {
-                    "content": "[PANAS] To what extent do you feel inspired?",
+                    "content": "[PERMA] In general, to what extent do you lead a purposeful and meaningful life? | عام طورپر، آپ کس حد تک بامقصد اور با معنی زندگی گزارتے ہیں؟",
                     "type": "SCALE",
                     "order": 7,
-                    "options": panas_options
+                    "options": opts_notatall_completely
                 },
                 {
-                    "content": "[PANAS] To what extent do you feel nervous?",
+                    "content": "[PERMA] To what extent do you receive help and support from others when you need it? | آپ کو ضرورت پڑنے پر دوسروں سے کتنی مدد اور حمایت ملتی ہے؟",
                     "type": "SCALE",
                     "order": 8,
-                    "options": panas_options
+                    "options": opts_notatall_completely
                 },
-                # --- GQ-6 questions (Sample) ---
                 {
-                    "content": "[GQ-6] I have so much in life to be thankful for.",
+                    "content": "[PERMA] In general, to what extent do you feel that what you do in your life is valuable and worthwhile? | عام طور پر، آپ کس حد تک محسوس کرتے ہیں کہ آپ اپنی زندگی میں جو کچھ کرتے ہیں وہ قیمتی اورقابل قدر ہے؟",
                     "type": "SCALE",
                     "order": 9,
-                    "options": gq6_options
+                    "options": opts_notatall_completely
                 },
-                # --- SIDAS questions (Sample) ---
                 {
-                    "content": "[SIDAS] In the past month, how often have you had thoughts of suicide?",
+                    "content": "[PERMA] In general, to what extent do you feel excited and interested in things? | عام طور پر، آپ کو چیزوں میں کتنی دلچسپی اور جوش و خروش محسوس ہوتا ہے؟",
                     "type": "SCALE",
                     "order": 10,
-                    "options": scale_0_to_10
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] How lonely do you feel in your daily life? | آپ اپنی روزمرہ زندگی میں خود کو کتنا تنہا محسوس کرتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 11,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] How satisfied are you with your current physical health? | آپ اپنی موجودہ جسمانی صحت سے کتنے مطمئن ہیں؟",
+                    "type": "SCALE",
+                    "order": 12,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] In general, how often do you feel positive? | عام طور پر، آپ کتنا  مثبت محسوس کرتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 13,
+                    "options": opts_never_always
+                },
+                {
+                    "content": "[PERMA] In general, how often do you feel angry? | عام طور پر ، آپ کتنی بار غصہ محسوس کرتے ہیں ؟",
+                    "type": "SCALE",
+                    "order": 14,
+                    "options": opts_never_always
+                },
+                {
+                    "content": "[PERMA] How often are you able to handle your responsibilities? | عام طور پر، آپ اپنی ذمہ داریوں کو نبھانے کے کتنے قابل ہیں؟",
+                    "type": "SCALE",
+                    "order": 15,
+                    "options": opts_never_always
+                },
+                {
+                    "content": "[PERMA] In general, how often do you feel sad? | عام طور پر، آپ خود کو کتنی بار اداس محسوس کرتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 16,
+                    "options": opts_never_always
+                },
+                {
+                    "content": "[PERMA] How often do you lose track of time while doing something you enjoy? | آپ کتنی بار اپنا پسندیدہ کام کرتے ہوئے وقت سے بے خبر ہو جاتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 17,
+                    "options": opts_never_always
+                },
+                {
+                    "content": "[PERMA] Compared to others of your same age and sex, how is your health? | اپنی عمر اور جنس کے دوسرے لوگوں کے مقابلے میں، آپ کی صحت کیسی ہے؟",
+                    "type": "SCALE",
+                    "order": 18,
+                    "options": opts_terrible_excellent
+                },
+                {
+                    "content": "[PERMA] To what extent do you feel loved? | آپ کو کس حد تک محسوس ہوتا ہے کہ لوگ آپ سے پیار کرتے ہیں / آپ کو چاہتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 19,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] To what extent do you generally feel you have a sense of direction in your life? | آپ کوکس حد تک محسوس ہوتا ہے کہ آپ کی زندگی کی کوئی  سمت / رخ ہے؟",
+                    "type": "SCALE",
+                    "order": 20,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] How satisfied are you with your personal relationships? | آپ اپنے ذاتی تعلقات / رشتوں سے کتنے مطمئن ہیں؟",
+                    "type": "SCALE",
+                    "order": 21,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] In general, to what extent do you feel contented? | عام طور پر، آپ کس حد تک مطمئن محسوس کرتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 22,
+                    "options": opts_notatall_completely
+                },
+                {
+                    "content": "[PERMA] Taking all things together, how happy would you say you are? | مجموعی طور پر/ تمام چیزوں کو ملاکر، آپ اپنے آپ کو کتنا خوش پاتے ہیں؟",
+                    "type": "SCALE",
+                    "order": 23,
+                    "options": opts_notatall_completely
+                },
+                # --- 9-Item PHQ-9 ---
+                {
+                    "content": "[PHQ-9] Little interest or pleasure in doing things | روزمرہ کے کاموں میں دلچسپی یا فطر کی کمی",
+                    "type": "SCALE",
+                    "order": 24,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Feeling down, depressed, or hopeless | اداسی، افسردگی یا مایوسی کا احساس",
+                    "type": "SCALE",
+                    "order": 25,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Trouble falling or staying asleep, or sleeping too much | نیند سے متعلق مسائل: نیند نہ آنا / بیچ میں اٹھ جانا / زیادہ سونا",
+                    "type": "SCALE",
+                    "order": 26,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Feeling tired or having little energy | تھکاوٹ یا کمزوری کا احساس",
+                    "type": "SCALE",
+                    "order": 27,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Poor appetite or overeating | بھوک میں کمی یا زیادتی",
+                    "type": "SCALE",
+                    "order": 28,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Feeling bad about yourself — or that you are a failure or have let yourself or your family down | شکست خوردگی کا احساس، یا یہ محسوس ہونا کہ آپ ناکام ہیں / خاندان کی توقعات پر پورا نہیں اتر رہے",
+                    "type": "SCALE",
+                    "order": 29,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Trouble concentrating on things, such as reading the newspaper or watching television | توجہ مرکوز رکھنے میں دشواری",
+                    "type": "SCALE",
+                    "order": 30,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Moving or speaking so slowly that other people could have noticed — or the opposite, being so fidgety or restless that you have been moving around a lot more than usual | غیر معمولی سست روی یا اضطراب",
+                    "type": "SCALE",
+                    "order": 31,
+                    "options": phq_options
+                },
+                {
+                    "content": "[PHQ-9] Thoughts that you would be better off dead, or of hurting yourself | یہ خیال کہ زندہ رہنے سے مرنا بہتر ہے، یا اپنی ذات کو نقصان پہنچانے کے خیالات",
+                    "type": "SCALE",
+                    "order": 32,
+                    "options": phq_options
+                },
+                # --- GAD-7 questions ---
+                {
+                    "content": "[GAD-7] Feeling nervous, anxious, or on edge | گھبراہٹ، پریشانی یا شدید نوعیت کا تناؤ",
+                    "type": "SCALE",
+                    "order": 33,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Not being able to stop or control worrying | پریشانی یا فکر پر قابو پانے میں دشواری",
+                    "type": "SCALE",
+                    "order": 34,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Worrying too much about different things | مختلف چیزوں کے بارے میں حد سے زیادہ بڑھی ہوئی تشویش",
+                    "type": "SCALE",
+                    "order": 35,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Trouble relaxing | پُرسکون رہنے میں دشواری",
+                    "type": "SCALE",
+                    "order": 36,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Being so restless that it is hard to sit still | اس قدر بے چینی یا اضطراب کہ ایک جگہ بیٹھنا مشکل ہو جائے",
+                    "type": "SCALE",
+                    "order": 37,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Becoming easily annoyed or irritable | معمولی باتوں کا چڑچڑاپن",
+                    "type": "SCALE",
+                    "order": 38,
+                    "options": phq_options
+                },
+                {
+                    "content": "[GAD-7] Feeling afraid, as if something awful might happen | ایک انجانے خوف کا احساس جیسے کچھ بہت برا ہونے والا ہے",
+                    "type": "SCALE",
+                    "order": 39,
+                    "options": phq_options
+                },
+                # --- PANAS questions ---
+                {
+                    "content": "[PANAS] Distressed | پریشان حال",
+                    "type": "SCALE",
+                    "order": 40,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Scared | ڈرا ہوا",
+                    "type": "SCALE",
+                    "order": 41,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Enthusiastic | پُر جوش",
+                    "type": "SCALE",
+                    "order": 42,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Alert | چوکنا / ہوشیار",
+                    "type": "SCALE",
+                    "order": 43,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Distressed (tormented) | تکلیف دہ حالت میں",
+                    "type": "SCALE",
+                    "order": 44,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Nervous | پریشان / مضطرب",
+                    "type": "SCALE",
+                    "order": 45,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Determined | پُر عزم",
+                    "type": "SCALE",
+                    "order": 46,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Afraid | خوفزدہ",
+                    "type": "SCALE",
+                    "order": 47,
+                    "options": panas_options
+                },
+                {
+                    "content": "[PANAS] Excited | جوشیلا",
+                    "type": "SCALE",
+                    "order": 48,
+                    "options": panas_options
+                },
+                # --- Gratitude Scale (26 items) ---
+                {
+                    "content": "[Gratitude] I have much to be grateful for in my life. | میرے پاس زندگی میں لوگوں کا شکر گزار ہونے کے لیے بہت کچھ ہے۔",
+                    "type": "SCALE",
+                    "order": 49,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] If I had to make a list of all the things and people I am grateful for, it would be very long. | اگر مجھے ہر اس چیز/لوگوں کی فہرست بنانی پڑے جن کے لیے میں شکر گزار ہوں تو یہ ایک بہت لمبی فہرست ہوگی۔",
+                    "type": "SCALE",
+                    "order": 50,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] As I grow older, I find myself able to appreciate the people, events, and situations that have been part of my life history. | جیسے جیسے میری عمر بڑھ رہی ہے، میں خود کو ان لوگوں، واقعات اور حالات کی تعریف کرنے کے قابل محسوس کرتا/ کرتی ہوں جو میری زندگی کی تاریخ کا حصہ رہے ہیں۔",
+                    "type": "SCALE",
+                    "order": 51,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful for what my friends have done for me. | میرے دوستوں نے میرے لیے جو کچھ کیا اس کے لیے میں شکر گزار ہوں۔",
+                    "type": "SCALE",
+                    "order": 52,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I value the things/people I have because I know I could lose them at any moment. | میں ان چیزوں/لوگوں کی قدر کرتا/کرتی ہوں جو میرے پاس ہیں کیونکہ میں جانتا/جانتی ہوں کہ میں انہیں کسی بھی وقت کھو سکتا/سکتی ہوں۔",
+                    "type": "SCALE",
+                    "order": 53,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I acknowledge what other people (parents, teachers, friends, relatives) have done for me. | میں یہ تسلیم کرتا/کرتی ہوں کہ دوسرے لوگوں (والدین، اساتذہ، دوست، احباب) نے میرے لیے کیا کچھ کیا ہے۔",
+                    "type": "SCALE",
+                    "order": 54,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I tell others how grateful I am to them. | میں دوسرے لوگوں کو بتاتا/بتاتی ہوں کہ میں ان کا/کی کتنا/کتنی شکر گزار ہوں۔",
+                    "type": "SCALE",
+                    "order": 55,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am satisfied with what I have in life and grateful to people. | میرے پاس زندگی میں جو کچھ ہے اس کے لیے میں مطمئن ہوں اور لوگوں کا/کی شکر گزار ہوں۔",
+                    "type": "SCALE",
+                    "order": 56,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I think being grateful to the people around me and appreciating beautiful things is a pleasant act. | میرے خیال میں اپنے ارد گرد کے لوگوں کا شکر گزار ہونا اور خوبصورت چیزوں کی تعریف کرنا ایک خوشگوار عمل ہے۔",
+                    "type": "SCALE",
+                    "order": 57,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I thank those who helped me along the way so that I could succeed in life. | میں ان لوگوں کا شکریہ ادا کرتا/کرتی ہوں جنہوں نے راستے میں میری مدد کی تاکہ میں زندگی میں کامیابی حاصل کر سکوں۔",
+                    "type": "SCALE",
+                    "order": 58,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful to those who helped me obtain my basic needs (e.g., food, clothing, shelter). | میں ان لوگوں کا/کی شکر گزار ہوں جنہوں نے مجھے میری بنیادی ضروریات (مثلاً کھانے کے لیے کچھ، پہننے کے لیے کپڑے، رہنے کی جگہ) حاصل کرنے میں مدد کی۔",
+                    "type": "SCALE",
+                    "order": 59,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] Whenever I meet people (friends, relatives, parents) who have helped me, I thank them. | جب بھی میری ان لوگوں (دوست، احباب، والدین) سے ملاقات ہوتی ہے جنہوں نے میری مدد کی، میں ان کا شکریہ ادا کرتا/کرتی ہوں۔",
+                    "type": "SCALE",
+                    "order": 60,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful for what others have done for me in my life. | میں اپنی زندگی میں دوسروں کی طرف سے میرے لیے کیے گئے کاموں کے لیے شکر گزار ہوں۔",
+                    "type": "SCALE",
+                    "order": 61,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful to the many people who gave me valuable advice or help that brought me to where I am today. | میں بہت سے لوگوں کی/کا شکر گزار ہوں جنہوں نے مجھے قیمتی مشورے یا مدد دی جس سے آج میں جہاں ہوں، وہاں تک پہنچنے میں مدد ملی۔",
+                    "type": "SCALE",
+                    "order": 62,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I feel that when I get what I need, God is blessing me. | مجھے لگتا ہے کہ جب مجھے اپنی ضرورت کی چیز ملتی ہے تو خدا مجھے برکت دے رہا ہے۔",
+                    "type": "SCALE",
+                    "order": 63,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] Experiences of loss have taught me to focus on every moment of life and thank Allah. | نقصان کے تجربات نے مجھے زندگی کے ہر لمحے پر توجہ دینا اور اللہ کا شکر بجا لانا سکھایا ہے۔",
+                    "type": "SCALE",
+                    "order": 64,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] After meals, I often think, 'What a wonderful meal Allah has provided!' | کھانے کے بعد، میں اکثر سوچتی/سوچتا ہوں، 'کیا شاندار کھانا اللہ نے نصیب کیا ہے!'",
+                    "type": "SCALE",
+                    "order": 65,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] The thought of death reminds me to live each day to the fullest and to thank Allah. | موت کا خیال مجھے ہر روز ایک بھرپور زندگی گزارنے اور اللہ کا شکر ادا کرنے کی یاد دلاتا ہے۔",
+                    "type": "SCALE",
+                    "order": 66,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I often think that life is truly a blessing. | میں اکثر سوچتی/سوچتا ہوں کہ زندگی واقعی ایک نعمت ہے۔",
+                    "type": "SCALE",
+                    "order": 67,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I think it is very important to be grateful to Allah every day. | میرے خیال میں ہر روز اللہ کا شکر گزار ہونا بہت ضروری ہے۔",
+                    "type": "SCALE",
+                    "order": 68,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] Allah has blessed me with many things for which I am grateful to Allah. | اللہ تعالیٰ نے مجھے بہت سی نعمتوں سے نوازا ہے جس پر میں اللہ کا/کی شکر گزار ہوں۔",
+                    "type": "SCALE",
+                    "order": 69,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] Whenever I achieve any success, I am grateful to Allah for it. | جب بھی میں کوئی کامیابی حاصل کرتی/کرتا ہوں تو اس پر اللہ کی/کا شکر گزار ہوتی/ہوتا ہوں۔",
+                    "type": "SCALE",
+                    "order": 70,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] Whenever I look at my life, I feel that Allah has shown special grace upon me. | جب بھی میں اپنی زندگی پر نظر ڈالتی/ڈالتا ہوں تو اس چیز کا احساس ہوتا ہے کہ مجھ پر اللہ کا خاص کرم ہے۔",
+                    "type": "SCALE",
+                    "order": 71,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I thank Allah for His blessings by offering prayer (namaz). | میں نماز ادا کر کے اللہ کی نعمتوں کا شکر ادا کرتا/کرتی ہوں۔",
+                    "type": "SCALE",
+                    "order": 72,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful to Allah who gave me parents who took care of my needs. | میں اللہ کا/کی شکر گزار ہوں جس نے مجھے میری ضروریات کا خیال رکھنے والے والدین عطا کیے۔",
+                    "type": "SCALE",
+                    "order": 73,
+                    "options": grat_options
+                },
+                {
+                    "content": "[Gratitude] I am grateful to Allah who gave me parents who understand me on every occasion. | میں اللہ کا/کی شکر گزار ہوں جس نے مجھے ایسے والدین عطا کیے جو ہر موقع پر میرا احساس کرتے ہیں۔",
+                    "type": "SCALE",
+                    "order": 74,
+                    "options": grat_options
+                },
+                # --- SIDAS Scale (5 items) ---
+                {
+                    "content": "[SIDAS] In the past month, how often have you had thoughts about suicide? | پچھلے ایک مہینے میں آپ کو خودکشی کے خیالات کتنی بار آئے ہیں؟",
+                    "type": "SCALE",
+                    "order": 75,
+                    "options": sidas_options_1
+                },
+                {
+                    "content": "[SIDAS] In the past month, how much control have you had over these thoughts? | پچھلے ایک مہینے میں، آپ کو کتنا محسوس ہوا کہ آپ ان خیالات کو قابو میں رکھ سکتے تھے؟",
+                    "type": "SCALE",
+                    "order": 76,
+                    "options": sidas_options_2
+                },
+                {
+                    "content": "[SIDAS] In the past month, how close have you come to making a suicide attempt? | پچھلے ایک مہینے میں آپ خودکشی کرنے کے کتنے قریب پہنچے تھے؟",
+                    "type": "SCALE",
+                    "order": 77,
+                    "options": sidas_options_3
+                },
+                {
+                    "content": "[SIDAS] In the past month, to what extent have you felt tormented by thoughts about suicide? | پچھلے ایک مہینے میں آپ خودکشی کے خیالات سے کتنا پریشان یا تنگ رہے تھے؟",
+                    "type": "SCALE",
+                    "order": 78,
+                    "options": sidas_options_4_5
+                },
+                {
+                    "content": "[SIDAS] In the past month, how much have thoughts about suicide interfered with your ability to carry out daily activities (work, household tasks, or social activities)? | پچھلے ایک مہینے میں خودکشی کے خیالات نے آپ کی روزمرہ کی سرگرمیوں (کام، گھر کے کام یا سماجی میل جول) میں کتنا خلل ڈالا ہے؟",
+                    "type": "SCALE",
+                    "order": 79,
+                    "options": sidas_options_4_5
                 }
             ]
             self._create_questions_for_questionnaire(battery_q, battery_data)

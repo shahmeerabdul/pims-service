@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { questionnairesApi } from '../services/api';
@@ -9,8 +9,18 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
+
+const SCALE_NAMES: Record<string, string> = {
+  'PERMA': 'PERMA Profiler',
+  'PHQ-9': 'Depression Severity (PHQ-9)',
+  'GAD-7': 'Anxiety Severity (GAD-7)',
+  'PANAS': 'Positive and Negative Affect (PANAS)',
+  'Gratitude': 'Gratitude Scale',
+  'SIDAS': 'Suicidal Ideation (SIDAS)',
+};
 
 const QuestionnairePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +34,18 @@ const QuestionnairePage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const initSession = async () => {
@@ -63,19 +85,119 @@ const QuestionnairePage: React.FC = () => {
   }, [id, navigate]);
 
   const questions = questionnaire?.questions || [];
-  const currentQuestion = questions[currentIndex];
-  const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0;
+
+  // Helper to extract prefix from question content
+  const getScaleGroup = (q: any) => {
+    const match = q.content.match(/^\[(.*?)\]/);
+    return match ? match[1] : 'General';
+  };
+
+  // Group questions by scale prefix
+  const scaleGroups = useMemo(() => {
+    const groups: { name: string; questions: any[] }[] = [];
+    const map: Record<string, any[]> = {};
+    
+    questions.forEach((q: any) => {
+      const scale = getScaleGroup(q);
+      if (!map[scale]) {
+        map[scale] = [];
+        groups.push({ name: scale, questions: map[scale] });
+      }
+      map[scale].push(q);
+    });
+    
+    return groups;
+  }, [questions]);
+
+  const currentScaleGroup = scaleGroups[currentIndex];
+  
+  // Progress is computed based on scale groups rather than individual questions
+  const progress = scaleGroups.length > 0 ? ((currentIndex + 1) / scaleGroups.length) * 100 : 0;
+
+  const isScaleGroupCompleted = useMemo(() => {
+    if (!currentScaleGroup) return false;
+
+    if (currentScaleGroup.name === 'SIDAS') {
+      const firstSidasQ = currentScaleGroup.questions[0];
+      if (firstSidasQ) {
+        const val1 = responses[firstSidasQ.id];
+        if (val1 === 0) {
+          return true;
+        }
+      }
+    }
+
+    return currentScaleGroup.questions.every((q: any) => {
+      if (!q.required) return true;
+      const val = responses[q.id];
+      return val !== undefined && val !== null && val !== '';
+    });
+  }, [currentScaleGroup, responses]);
 
   const handleResponseChange = (questionId: string, value: any) => {
-    setResponses(prev => ({
-      ...prev,
+    let newResponses = {
+      ...responses,
       [questionId]: value
-    }));
+    };
+
+    // If this is SIDAS Item 1 and the value is 0, auto-populate Items 2-5 with 0.
+    // If the value is > 0 and was previously 0, clear Items 2-5 to force manual input.
+    if (currentScaleGroup?.name === 'SIDAS') {
+      const firstSidasQ = currentScaleGroup.questions[0];
+      if (firstSidasQ && questionId === firstSidasQ.id) {
+        if (value === 0) {
+          currentScaleGroup.questions.slice(1).forEach((q: any) => {
+            newResponses[q.id] = 0;
+          });
+        } else if (responses[firstSidasQ.id] === 0) {
+          currentScaleGroup.questions.slice(1).forEach((q: any) => {
+            delete newResponses[q.id];
+          });
+        }
+      }
+    }
+
+    setResponses(newResponses);
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    setIsSaving(true);
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (!responseSetId) return;
+      try {
+        const payload = questions.map((q: any) => {
+          const response = newResponses[q.id];
+          const base = { question_id: q.id };
+
+          if (q.type === 'TEXT') {
+            return { ...base, text_value: response || "" };
+          } else if (q.type === 'SCALE' || q.type === 'CHOICE') {
+            if (q.type === 'SCALE') {
+              const selectedOpt = q.options.find((o: any) => o.numeric_value === response);
+              return { ...base, selected_option_id: selectedOpt?.id || null };
+            } else {
+              return { ...base, selected_option_id: response || null };
+            }
+          }
+          return base;
+        });
+
+        await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
+        setLastSaved(new Date());
+      } catch (err) {
+        console.error('Failed to auto-save:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 500);
   };
 
   const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < scaleGroups.length - 1) {
       setCurrentIndex(prev => prev + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       submitAll();
     }
@@ -84,6 +206,7 @@ const QuestionnairePage: React.FC = () => {
   const handleBack = () => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -114,11 +237,33 @@ const QuestionnairePage: React.FC = () => {
 
       if (questionnaire?.assessment_type === 'SOCIODEMOGRAPHIC') {
         localStorage.setItem('has_completed_sociodemographic', 'true');
+        try {
+          const qRes = await questionnairesApi.list();
+          const qList = Array.isArray(qRes.data) ? qRes.data : qRes.data?.results || [];
+          const battery = qList.find((q: any) => q.is_active && q.assessment_type === 'PSYCHOMETRIC');
+          if (battery) {
+            setCompleted(true);
+            setTimeout(() => {
+              setCompleted(false);
+              navigate(`/questionnaire/${battery.id}?milestone=SIGNUP`, { replace: true });
+              window.location.reload();
+            }, 3000);
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to find psychometric battery questionnaire", e);
+        }
+      }
+
+      // If the SIGNUP milestone psychometrics were just completed, clear due_milestone
+      const queryParams = new URLSearchParams(window.location.search);
+      const completedMilestone = queryParams.get('milestone');
+      if (completedMilestone === 'SIGNUP' && questionnaire?.assessment_type === 'PSYCHOMETRIC') {
+        localStorage.removeItem('due_milestone');
       }
 
       setCompleted(true);
 
-      // Short delay for success experience before redirect
       setTimeout(() => {
         navigate('/dashboard', {
           state: { message: 'Assessment finalized.' },
@@ -178,7 +323,7 @@ const QuestionnairePage: React.FC = () => {
     );
   }
 
-  if (error || !currentQuestion) {
+  if (error || scaleGroups.length === 0 || !currentScaleGroup) {
     return (
       <div className="max-w-md mx-auto border border-zinc-200 rounded-xl p-10 text-center mt-12 space-y-6 bg-white shadow-sm">
         <AlertCircle className="w-12 h-12 text-zinc-400 mx-auto" />
@@ -206,13 +351,47 @@ const QuestionnairePage: React.FC = () => {
     );
   }
 
+
+
+  const splitQuestionContent = (content: string) => {
+    const cleanContent = content.replace(/^\[.*?\]\s*/, '');
+    if (cleanContent.includes('|')) {
+      const parts = cleanContent.split('|').map(p => p.trim());
+      return { english: parts[0], urdu: parts[1] };
+    }
+    return { english: cleanContent, urdu: '' };
+  };
+
+  const currentScaleName = currentScaleGroup.name;
+  const currentScaleTitle = SCALE_NAMES[currentScaleName] || `${currentScaleName} Scale`;
+
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4">
+    <div className="max-w-4xl mx-auto py-12 px-4">
+      {/* Sticky Header for Save Status */}
+      <div className="sticky top-0 z-10 bg-zinc-50/90 backdrop-blur-md border-b border-zinc-200 py-4 px-6 flex justify-between items-center -mx-4 mb-8">
+        <h2 className="text-sm font-bold text-zinc-950">{questionnaire?.title}</h2>
+        <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+          {isSaving ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Saving draft...</span>
+            </>
+          ) : lastSaved ? (
+            <>
+              <Save className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Draft Saved ({lastSaved.toLocaleTimeString()})</span>
+            </>
+          ) : (
+            <span>Ready</span>
+          )}
+        </div>
+      </div>
+
       {/* Header & Progress */}
       <div className="mb-16 space-y-6">
-        <div className="flex justify-between items-end text-[10px] font-black uppercase tracking-[0.3em]">
-          <span className="text-zinc-400 text-xs font-medium">Step {currentIndex + 1} / {questions.length}</span>
-          <span className="text-zinc-700 text-xs font-medium">{questionnaire?.title}</span>
+        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.3em]">
+          <span className="text-zinc-400 text-xs font-medium">Scale {currentIndex + 1} / {scaleGroups.length}</span>
+          <span className="text-zinc-700 text-xs font-semibold">{currentScaleTitle}</span>
         </div>
         <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
           <motion.div
@@ -226,59 +405,92 @@ const QuestionnairePage: React.FC = () => {
 
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentQuestion.id}
+          key={currentScaleGroup.name}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.3 }}
-          className="border border-zinc-200 rounded-xl p-8 md:p-12 min-h-[500px] flex flex-col bg-white shadow-sm"
+          className="space-y-12"
         >
-          <div className="flex-grow">
-            <h2 className="text-2xl md:text-3xl font-bold text-zinc-900 leading-tight mb-12">
-              {currentQuestion.content}
-              {currentQuestion.required && <span className="text-zinc-300 ml-2">*</span>}
-            </h2>
+          <div className="space-y-8">
+            {currentScaleGroup.questions.map((question: any, idx: number) => {
+              if (currentScaleGroup.name === 'SIDAS' && idx > 0) {
+                const firstSidasQ = currentScaleGroup.questions[0];
+                if (firstSidasQ && responses[firstSidasQ.id] === 0) {
+                  return null;
+                }
+              }
+              const { english, urdu } = splitQuestionContent(question.content);
+              return (
+                <div key={question.id} className="border border-zinc-200 rounded-xl p-6 md:p-8 bg-white shadow-sm space-y-6">
+                  <div className="flex justify-between items-center pb-4 border-b border-zinc-100">
+                    <span className="text-xs font-medium text-zinc-400">Question {idx + 1} of {currentScaleGroup.questions.length}</span>
+                    {question.required && <span className="text-xs font-semibold text-zinc-400">* Required</span>}
+                  </div>
+                  
+                  {/* Bilingual Question Text or Single Language Fallback */}
+                  {urdu ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start mb-4">
+                      <div className="text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">English</span>
+                        <p className="text-base md:text-lg font-medium text-zinc-800 leading-relaxed">{english}</p>
+                      </div>
+                      <div className="text-right" dir="rtl">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">اردو</span>
+                        <p className="text-base md:text-lg font-medium text-zinc-800 leading-relaxed font-urdu">{urdu}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-left mb-4">
+                      <p className="text-base md:text-lg font-medium text-zinc-800 leading-relaxed">{english}</p>
+                    </div>
+                  )}
 
-            {/* Dynamic Rendering */}
-            <div className="mt-8">
-              {currentQuestion.type === 'CHOICE' && (
-                <div className="grid grid-cols-1 gap-4">
-                  {currentQuestion.options.map((option: any) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleResponseChange(currentQuestion.id, option.id)}
-                      className={`group p-5 border rounded-lg text-left transition-all duration-200 flex items-center justify-between ${responses[currentQuestion.id] === option.id
-                          ? 'border-zinc-700 bg-zinc-800 text-white shadow-md'
-                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm'
-                        }`}
-                    >
-                      <span className="font-medium text-sm">{option.label}</span>
-                      <CheckCircle2 className={`w-6 h-6 transition-opacity ${responses[currentQuestion.id] === option.id ? 'opacity-100' : 'opacity-0'}`} />
-                    </button>
-                  ))}
+                  {/* Input options */}
+                  <div className="pt-4">
+                    {question.type === 'CHOICE' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {question.options.map((option: any) => (
+                          <button
+                            key={option.id}
+                            onClick={() => handleResponseChange(question.id, option.id)}
+                            className={`group p-4 border rounded-lg text-left transition-all duration-200 flex items-center justify-between ${
+                              responses[question.id] === option.id
+                                ? 'border-zinc-700 bg-zinc-800 text-white shadow-md'
+                                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm'
+                            }`}
+                          >
+                            <span className="font-medium text-sm">{option.label}</span>
+                            <CheckCircle2 className={`w-5 h-5 transition-opacity ${responses[question.id] === option.id ? 'opacity-100' : 'opacity-0'}`} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {question.type === 'SCALE' && (
+                      <LikertSlider
+                        options={question.options}
+                        value={responses[question.id]}
+                        onChange={(val) => handleResponseChange(question.id, val)}
+                      />
+                    )}
+
+                    {question.type === 'TEXT' && (
+                      <textarea
+                        className="w-full min-h-[150px] bg-white border border-zinc-200 rounded-lg p-4 text-base outline-none focus:ring-2 focus:ring-zinc-200 transition-all resize-none"
+                        placeholder="Type your response..."
+                        value={responses[question.id] || ''}
+                        onChange={(e) => handleResponseChange(question.id, e.target.value)}
+                      />
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {currentQuestion.type === 'SCALE' && (
-                <LikertSlider
-                  options={currentQuestion.options}
-                  value={responses[currentQuestion.id]}
-                  onChange={(val) => handleResponseChange(currentQuestion.id, val)}
-                />
-              )}
-
-              {currentQuestion.type === 'TEXT' && (
-                <textarea
-                  className="w-full min-h-[300px] bg-white border border-zinc-200 rounded-lg p-6 text-base outline-none focus:ring-2 focus:ring-zinc-200 transition-all resize-none"
-                  placeholder="Type your response..."
-                  value={responses[currentQuestion.id] || ''}
-                  onChange={(e) => handleResponseChange(currentQuestion.id, e.target.value)}
-                />
-              )}
-            </div>
+              );
+            })}
           </div>
 
-          <div className="mt-8 pt-8 border-t border-zinc-200 flex justify-between items-center">
+          {/* Navigation panel */}
+          <div className="pt-8 border-t border-zinc-200 flex justify-between items-center">
             <button
               onClick={handleBack}
               disabled={currentIndex === 0}
@@ -289,14 +501,14 @@ const QuestionnairePage: React.FC = () => {
 
             <button
               onClick={handleNext}
-              disabled={submitting || (currentQuestion.required && responses[currentQuestion.id] === undefined)}
-              className="px-8 py-3 bg-zinc-800 text-white font-medium rounded-lg text-sm hover:bg-zinc-700 transition-colors min-w-[140px] flex items-center justify-center gap-2"
+              disabled={submitting || !isScaleGroupCompleted}
+              className="px-8 py-3 bg-zinc-800 text-white font-medium rounded-lg text-sm hover:bg-zinc-700 transition-colors min-w-[140px] flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  {currentIndex === questions.length - 1 ? 'Complete' : 'Continue'}
+                  {currentIndex === scaleGroups.length - 1 ? 'Complete' : 'Continue'}
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

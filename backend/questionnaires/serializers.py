@@ -1,5 +1,178 @@
+import logging
 from rest_framework import serializers
 from .models import Questionnaire, Question, Option, ResponseSet, Response
+
+logger = logging.getLogger(__name__)
+
+def calculate_and_save_scores(response_set):
+    """
+    Calculates subscale and total scores for the longitudinal battery response set
+    and saves them in the 'scores' JSON field.
+    """
+    responses = Response.objects.filter(response_set=response_set).select_related('question', 'selected_option')
+    
+    # Mapping of question order -> numeric value
+    val_map = {}
+    for r in responses:
+        if r.question and r.selected_option is not None:
+            val_map[r.question.order] = r.selected_option.numeric_value
+            
+    # If there are no responses, return
+    if not val_map:
+        return
+
+    scores = {}
+
+    # 1. PERMA
+    perma_p_orders = [3, 13, 22]
+    perma_e_orders = [2, 10, 17]
+    perma_r_orders = [8, 19, 21]
+    perma_m_orders = [7, 9, 20]
+    perma_a_orders = [1, 5, 15]
+    perma_n_orders = [4, 14, 16]
+    perma_h_orders = [6, 12, 18]
+    perma_lon_order = 11
+    perma_overall_orders = [3, 13, 22, 2, 10, 17, 8, 19, 21, 7, 9, 20, 1, 5, 15, 23]
+
+    def get_mean(orders):
+        vals = [val_map[o] for o in orders if o in val_map]
+        return round(sum(vals) / len(vals), 2) if vals else 0.0
+
+    # Only compute if at least some PERMA items are present
+    if any(o in val_map for o in range(1, 24)):
+        scores['PERMA_P'] = get_mean(perma_p_orders)
+        scores['PERMA_E'] = get_mean(perma_e_orders)
+        scores['PERMA_R'] = get_mean(perma_r_orders)
+        scores['PERMA_M'] = get_mean(perma_m_orders)
+        scores['PERMA_A'] = get_mean(perma_a_orders)
+        scores['PERMA_N'] = get_mean(perma_n_orders)
+        scores['PERMA_H'] = get_mean(perma_h_orders)
+        scores['PERMA_LON'] = float(val_map.get(perma_lon_order, 0.0))
+        scores['PERMA_OVERALL'] = get_mean(perma_overall_orders)
+
+    # 2. PHQ-9
+    phq_orders = list(range(24, 33))
+    if any(o in val_map for o in phq_orders):
+        scores['PHQ9_TOTAL'] = sum(val_map[o] for o in phq_orders if o in val_map)
+
+    # 3. GAD-7
+    gad_orders = list(range(33, 40))
+    if any(o in val_map for o in gad_orders):
+        scores['GAD7_TOTAL'] = sum(val_map[o] for o in gad_orders if o in val_map)
+
+    # 4. PANAS
+    panas_pa_orders = [42, 43, 46, 48]
+    panas_na_orders = [40, 41, 44, 45, 47]
+    if any(o in val_map for o in range(40, 49)):
+        scores['PANAS_PA'] = sum(val_map[o] for o in panas_pa_orders if o in val_map)
+        scores['PANAS_NA'] = sum(val_map[o] for o in panas_na_orders if o in val_map)
+
+    # 5. Gratitude
+    grat_gto_orders = list(range(49, 63))
+    grat_gta_orders = list(range(63, 75))
+    grat_all_orders = list(range(49, 75))
+    if any(o in val_map for o in grat_all_orders):
+        scores['GRAT_GTO'] = sum(val_map[o] for o in grat_gto_orders if o in val_map)
+        scores['GRAT_GTA'] = sum(val_map[o] for o in grat_gta_orders if o in val_map)
+        scores['GRAT_TOTAL'] = sum(val_map[o] for o in grat_all_orders if o in val_map)
+
+    # 6. SIDAS
+    if any(o in val_map for o in range(75, 80)):
+        sidas_item1 = val_map.get(75, 0)
+        if sidas_item1 == 0:
+            scores['SIDAS_TOTAL'] = 0
+        else:
+            sidas_item2 = val_map.get(76, 0)
+            sidas_item3 = val_map.get(77, 0)
+            sidas_item4 = val_map.get(78, 0)
+            sidas_item5 = val_map.get(79, 0)
+            scores['SIDAS_TOTAL'] = sidas_item1 + (10 - sidas_item2) + sidas_item3 + sidas_item4 + sidas_item5
+
+    response_set.scores = scores
+    response_set.save(update_fields=['scores'])
+
+
+def check_and_trigger_risk_protocol(response_set):
+    """
+    Checks if the response set contains a high risk answer:
+    - PHQ-9 Item 9 >= 1
+    - SIDAS Item 3 > 0
+    - SIDAS Total >= 21
+    and triggers a risk-protocol alert if found.
+    """
+    from django.core.cache import cache
+    from django.contrib.auth import get_user_model
+    from notifications.models import Notification
+    from django.utils import timezone
+
+    triggered = False
+    reasons = []
+
+    # 1. PHQ-9 Item 9 >= 1
+    item_9_response = Response.objects.filter(
+        response_set=response_set,
+        question__order=32
+    ).first()
+    if not item_9_response:
+        item_9_response = Response.objects.filter(
+            response_set=response_set,
+            question__content__icontains="[PHQ-9]"
+        ).filter(
+            question__content__icontains="dead"
+        ).first()
+
+    if item_9_response and item_9_response.selected_option:
+        val = item_9_response.selected_option.numeric_value
+        if val >= 1:
+            triggered = True
+            reasons.append(f"PHQ-9 Item 9 with score {val} (Suicidal Ideation/Self-Harm)")
+
+    # 2. SIDAS Item 3 > 0 (closeness to attempt)
+    sidas_3_response = Response.objects.filter(
+        response_set=response_set,
+        question__order=77
+    ).first()
+    if sidas_3_response and sidas_3_response.selected_option:
+        val_sidas_3 = sidas_3_response.selected_option.numeric_value
+        if val_sidas_3 > 0:
+            triggered = True
+            reasons.append(f"SIDAS Item 3 with score {val_sidas_3} (Closeness to suicide attempt)")
+
+    # 3. SIDAS Total >= 21
+    sidas_total = response_set.scores.get('SIDAS_TOTAL')
+    if sidas_total is not None and sidas_total >= 21:
+        triggered = True
+        reasons.append(f"SIDAS Total with score {sidas_total} (High suicide risk)")
+
+    if triggered:
+        cache_key = f"risk_alert_triggered_{response_set.id}"
+        
+        if not cache.get(cache_key):
+            cache.set(cache_key, True, timeout=86400)
+            
+            user = response_set.user
+            reasons_str = ", ".join(reasons)
+            
+            logger.critical(
+                "RISK PROTOCOL ALERT: User %s (ID: %s, Email: %s) flagged for suicidal risk: %s.",
+                user.username, user.id, user.email, reasons_str
+            )
+            
+            User = get_user_model()
+            admins = User.objects.filter(is_staff=True)
+            for admin in admins:
+                Notification.objects.create(
+                    user=admin,
+                    n_type='email',
+                    message=(
+                        f"CRITICAL SAFETY ALERT: Participant '{user.username}' (ID: {user.id}) "
+                        f"has triggered suicidal risk protocols. Reasons: {reasons_str}. "
+                        f"Immediate clinical follow-up required."
+                    ),
+                    scheduled_time=timezone.now(),
+                    status='pending'
+                )
+
 
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -164,8 +337,12 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
                 else:
                     assign_user_to_group(user)
                     user.has_completed_sociodemographic = True
-                    user.onboarding_completed_at = timezone.now()
-                    user.save(update_fields=['has_completed_sociodemographic', 'onboarding_completed_at'])
+                    user.save(update_fields=['has_completed_sociodemographic'])
+
+            # 4.5. Set onboarding_completed_at when SIGNUP milestone of PSYCHOMETRIC questionnaire is completed
+            if instance.milestone == 'SIGNUP' and instance.questionnaire.assessment_type == 'PSYCHOMETRIC':
+                user.onboarding_completed_at = timezone.now()
+                user.save(update_fields=['onboarding_completed_at'])
 
             # 5. Mark post-test completed if milestone is '7_DAYS' or is_legacy_posttest
             is_legacy_posttest = instance.questionnaire.is_posttest
@@ -177,6 +354,12 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
             # Invalidate cached due milestone on submission
             from django.core.cache import cache
             cache.delete(f"user_{user.id}_due_milestone")
+
+            # Calculate and save scores
+            calculate_and_save_scores(instance)
+
+            # Check and trigger risk-protocol alert
+            check_and_trigger_risk_protocol(instance)
 
         return instance
 
@@ -236,5 +419,11 @@ class ResponseSetDraftSerializer(serializers.ModelSerializer):
             
             # Note: We do NOT mark status = 'COMPLETED' or set completed_at
             instance.save()
+
+            # Calculate and save scores on draft saving
+            calculate_and_save_scores(instance)
+
+            # Check and trigger risk-protocol alert on draft saving
+            check_and_trigger_risk_protocol(instance)
 
         return instance

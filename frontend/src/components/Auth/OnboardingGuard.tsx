@@ -29,7 +29,17 @@ const OnboardingGuard: React.FC<OnboardingGuardProps> = ({ children, requireAdmi
   }
 
   // Participant Redirection Logic
-  if (!hasCompletedSociodemographic) {
+  const dueMilestone = localStorage.getItem('due_milestone');
+
+  if (dueMilestone === 'SIGNUP') {
+    // allow access to /sociodemographic AND active questionnaire IDs
+    const isAllowedPath = location.pathname === '/sociodemographic' || 
+                         location.pathname.startsWith('/questionnaire/');
+                         
+    if (!isAllowedPath) {
+      return <Navigate to="/sociodemographic" replace />;
+    }
+  } else if (!hasCompletedSociodemographic) {
     // allow access to /sociodemographic AND active questionnaire IDs
     const isAllowedPath = location.pathname === '/sociodemographic' || 
                          location.pathname.startsWith('/questionnaire/');

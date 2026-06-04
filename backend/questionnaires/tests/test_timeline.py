@@ -92,14 +92,14 @@ class TestTimelineScheduler:
             cache.clear()
             assert onboarded_user.get_due_milestone is None
 
-        # Day 89: 3_MONTHS is not due yet
+        # Day 96: 3_MONTHS is not due yet
         cache.clear()
-        with freeze_time(base_time + timedelta(days=89)):
+        with freeze_time(base_time + timedelta(days=96)):
             assert onboarded_user.get_due_milestone is None
 
-        # Day 90: 3_MONTHS is due
+        # Day 97: 3_MONTHS is due
         cache.clear()
-        with freeze_time(base_time + timedelta(days=90)):
+        with freeze_time(base_time + timedelta(days=97)):
             assert onboarded_user.get_due_milestone == '3_MONTHS'
             
             # Submit 3_MONTHS completion
@@ -110,18 +110,18 @@ class TestTimelineScheduler:
                 milestone='3_MONTHS',
                 completed_at=timezone.now()
             )
-            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.delete(f"user_{onboarded_user.id}_due_milestone")
             cache.clear()
             assert onboarded_user.get_due_milestone is None
 
-        # Day 179: 6_MONTHS is not due
+        # Day 186: 6_MONTHS is not due
         cache.clear()
-        with freeze_time(base_time + timedelta(days=179)):
+        with freeze_time(base_time + timedelta(days=186)):
             assert onboarded_user.get_due_milestone is None
 
-        # Day 180: 6_MONTHS is due
+        # Day 187: 6_MONTHS is due
         cache.clear()
-        with freeze_time(base_time + timedelta(days=180)):
+        with freeze_time(base_time + timedelta(days=187)):
             assert onboarded_user.get_due_milestone == '6_MONTHS'
             
             # Submit 6_MONTHS completion
@@ -132,18 +132,18 @@ class TestTimelineScheduler:
                 milestone='6_MONTHS',
                 completed_at=timezone.now()
             )
-            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.delete(f"user_{onboarded_user.id}_due_milestone")
             cache.clear()
             assert onboarded_user.get_due_milestone is None
 
-        # Day 364: 1_YEAR is not due
+        # Day 371: 1_YEAR is not due
         cache.clear()
-        with freeze_time(base_time + timedelta(days=364)):
+        with freeze_time(base_time + timedelta(days=371)):
             assert onboarded_user.get_due_milestone is None
 
-        # Day 365: 1_YEAR is due
+        # Day 372: 1_YEAR is due
         cache.clear()
-        with freeze_time(base_time + timedelta(days=365)):
+        with freeze_time(base_time + timedelta(days=372)):
             assert onboarded_user.get_due_milestone == '1_YEAR'
             
             # Submit 1_YEAR completion
@@ -154,7 +154,7 @@ class TestTimelineScheduler:
                 milestone='1_YEAR',
                 completed_at=timezone.now()
             )
-            cache.delete(f"user:{onboarded_user.id}:due_milestone")
+            cache.delete(f"user_{onboarded_user.id}_due_milestone")
             cache.clear()
             assert onboarded_user.get_due_milestone is None
 
@@ -214,11 +214,11 @@ class TestTimelineScheduler:
 
 @pytest.mark.django_db
 def test_milestone_availability_by_timeline_delta(authenticated_client, test_user):
-    # Mock onboarding_completed_at to 91 days ago.
-    test_user.has_completed_sociodemographic = True
+    # Mock onboarding_completed_at to 97 days ago, and T1 completion to 90 days ago.
     test_user.has_completed_sociodemographic = True
     test_user.has_completed_posttest = True  # Complete the 7_DAYS milestone
-    test_user.onboarding_completed_at = timezone.now() - timedelta(days=91)
+    test_user.onboarding_completed_at = timezone.now() - timedelta(days=97)
+    test_user.posttest_completed_at = timezone.now() - timedelta(days=90)
     test_user.save()
 
     # Clear cache to ensure clean test run

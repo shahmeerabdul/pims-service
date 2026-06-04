@@ -84,6 +84,7 @@ class ResponseSet(models.Model):
         ('1_YEAR', '1 Year'),
     )
     milestone = models.CharField(max_length=15, choices=MILESTONES, db_index=True, null=True, blank=True)
+    scores = models.JSONField(default=dict, blank=True, help_text="Calculated subscale and total scores on submission")
 
     class Meta:
         indexes = [

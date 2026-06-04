@@ -31,20 +31,25 @@ const DashboardPage: React.FC = () => {
         setActivities(actData && !actData.detail ? [actData] : []);
         setPhase(phaseRes.data);
         setUserProfile(profileRes.data);
+
+        // Keep localStorage in sync with the server-side due_milestone
+        if (profileRes.data) {
+          localStorage.setItem('due_milestone', profileRes.data.due_milestone || '');
+        }
         
         // Handle notifications
         const notifData = Array.isArray(notifRes.data) ? notifRes.data : notifRes.data?.results || [];
         setNotifications(notifData.slice(0, 3));
 
-        // If user is due for post-test, find the post-test questionnaire
-        if (profileRes.data?.is_posttest_due) {
+        // If user is due for a milestone, find the psychometric questionnaire
+        if (profileRes.data?.due_milestone) {
           try {
             const questionnaires = await questionnairesApi.list();
             const qList = Array.isArray(questionnaires.data) ? questionnaires.data : questionnaires.data?.results || [];
-            const posttest = qList.find((q: any) => q.is_posttest);
-            if (posttest) setPosttestQuestionnaire(posttest);
+            const battery = qList.find((q: any) => q.is_active && q.assessment_type === 'PSYCHOMETRIC');
+            if (battery) setPosttestQuestionnaire(battery);
           } catch (e) {
-            console.error('Failed to fetch posttest questionnaire', e);
+            console.error('Failed to fetch milestone questionnaire', e);
           }
         }
 
@@ -104,28 +109,75 @@ const DashboardPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Post-test Banner */}
-          {userProfile?.is_posttest_due && posttestQuestionnaire && (
-            <section className="border-2 border-emerald-200 rounded-xl p-6 md:p-8 bg-gradient-to-r from-emerald-50 to-white shadow-sm">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
-                    <ClipboardCheck size={24} />
+          {/* Milestone Banner */}
+          {userProfile?.due_milestone && posttestQuestionnaire && (() => {
+            const getMilestoneDetails = (milestone: string) => {
+              switch (milestone) {
+                case 'SIGNUP':
+                  return {
+                    title: 'Baseline Psychometric Scales Available',
+                    description: 'Please complete the baseline assessment to finalize your signup.',
+                    buttonText: 'Start Baseline Assessment',
+                    colorClass: 'from-emerald-50 to-white border-emerald-200 text-emerald-600 bg-emerald-600 hover:bg-emerald-700'
+                  };
+                case '7_DAYS':
+                  return {
+                    title: 'Day 7 Post-Test Available',
+                    description: 'Congratulations on completing 7 days! Please take the final assessment to wrap up your experiment.',
+                    buttonText: 'Start Post-Test',
+                    colorClass: 'from-emerald-50 to-white border-emerald-200 text-emerald-600 bg-emerald-600 hover:bg-emerald-700'
+                  };
+                case '3_MONTHS':
+                  return {
+                    title: 'Month 3 Follow-Up Available',
+                    description: 'Please complete the Month 3 follow-up assessment.',
+                    buttonText: 'Start Month 3 Assessment',
+                    colorClass: 'from-blue-50 to-white border-blue-200 text-blue-600 bg-blue-600 hover:bg-blue-700'
+                  };
+                case '6_MONTHS':
+                  return {
+                    title: 'Month 6 Follow-Up Available',
+                    description: 'Please complete the Month 6 follow-up assessment.',
+                    buttonText: 'Start Month 6 Assessment',
+                    colorClass: 'from-purple-50 to-white border-purple-200 text-purple-600 bg-purple-600 hover:bg-purple-700'
+                  };
+                case '1_YEAR':
+                  return {
+                    title: 'Month 12 Follow-Up Available',
+                    description: 'Please complete the Month 12 follow-up assessment.',
+                    buttonText: 'Start Month 12 Assessment',
+                    colorClass: 'from-indigo-50 to-white border-indigo-200 text-indigo-600 bg-indigo-600 hover:bg-indigo-700'
+                  };
+                default:
+                  return null;
+              }
+            };
+
+            const details = getMilestoneDetails(userProfile.due_milestone);
+            if (!details) return null;
+
+            return (
+              <section className={`border-2 rounded-xl p-6 md:p-8 bg-gradient-to-r shadow-sm ${details.colorClass.split(' ').slice(0, 2).join(' ')}`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 ${details.colorClass.split(' ').slice(4, 5).join(' ')}`}>
+                      <ClipboardCheck size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-zinc-900">{details.title}</h3>
+                      <p className="text-sm text-zinc-500 mt-0.5">{details.description}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-zinc-900">Day 7 Post-Test Available</h3>
-                    <p className="text-sm text-zinc-500 mt-0.5">Congratulations on completing 7 days! Please take the final assessment to wrap up your experiment.</p>
-                  </div>
+                  <Link
+                    to={`/questionnaire/${posttestQuestionnaire.id}?milestone=${userProfile.due_milestone}`}
+                    className={`px-6 py-3 text-white rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 shrink-0 ${details.colorClass.split(' ').slice(4, 6).join(' ')}`}
+                  >
+                    {details.buttonText} <ArrowRight size={16} />
+                  </Link>
                 </div>
-                <Link
-                  to={`/questionnaire/${posttestQuestionnaire.id}`}
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2 shrink-0"
-                >
-                  Start Post-Test <ArrowRight size={16} />
-                </Link>
-              </div>
-            </section>
-          )}
+              </section>
+            );
+          })()}
 
           <section className="border border-zinc-200 rounded-xl p-6 md:p-8 bg-white shadow-sm">
             <h2 className="text-xl font-bold text-zinc-900 mb-6 flex items-center gap-2">

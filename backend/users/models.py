@@ -118,13 +118,6 @@ class User(AbstractUser):
         if cached_val is not None:
             return None if cached_val == "NONE" else cached_val
 
-        # If onboarding is incomplete, SIGNUP is due.
-        if not self.has_completed_sociodemographic or not self.has_completed_sociodemographic:
-            return 'SIGNUP'
-
-        if not self.onboarding_completed_at:
-            return None
-
         # Fetch completed milestones to prevent double-serving
         from questionnaires.models import ResponseSet
         completed_milestones = set(
@@ -134,20 +127,36 @@ class User(AbstractUser):
         if self.has_completed_posttest:
             completed_milestones.add('7_DAYS')
 
-        now = timezone.now()
-        delta = now.date() - self.onboarding_completed_at.date()
-        days = delta.days
+        # If onboarding is incomplete, SIGNUP is due.
+        if not self.has_completed_sociodemographic or ('SIGNUP' not in completed_milestones and not self.onboarding_completed_at):
+            return 'SIGNUP'
 
+        if not self.onboarding_completed_at:
+            return None
+
+        now = timezone.now()
         due = None
+
         # Evaluate timeline sequentially
-        if '7_DAYS' not in completed_milestones and self.current_experiment_day is not None and self.current_experiment_day >= 7:
-            due = '7_DAYS'
-        elif '3_MONTHS' not in completed_milestones and days >= 90:
-            due = '3_MONTHS'
-        elif '6_MONTHS' not in completed_milestones and days >= 180:
-            due = '6_MONTHS'
-        elif '1_YEAR' not in completed_milestones and days >= 365:
-            due = '1_YEAR'
+        if '7_DAYS' not in completed_milestones:
+            if self.current_experiment_day is not None and self.current_experiment_day >= 7:
+                due = '7_DAYS'
+        else:
+            # Find T1 completion time
+            t1_completed_at = self.posttest_completed_at
+            if not t1_completed_at:
+                t1_rs = ResponseSet.objects.filter(user=self, status='COMPLETED', milestone='7_DAYS').first()
+                if t1_rs:
+                    t1_completed_at = t1_rs.completed_at
+            
+            if t1_completed_at:
+                days_since_t1 = (now.date() - t1_completed_at.date()).days
+                if '3_MONTHS' not in completed_milestones and days_since_t1 >= 90:
+                    due = '3_MONTHS'
+                elif '6_MONTHS' not in completed_milestones and days_since_t1 >= 180:
+                    due = '6_MONTHS'
+                elif '1_YEAR' not in completed_milestones and days_since_t1 >= 365:
+                    due = '1_YEAR'
 
         # Cache until midnight
         tomorrow = (now + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)

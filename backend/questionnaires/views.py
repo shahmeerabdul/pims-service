@@ -64,10 +64,13 @@ class ResponseSetListCreateView(generics.ListCreateAPIView):
             if q_obj.assessment_type == 'SOCIODEMOGRAPHIC' and user.has_completed_sociodemographic:
                 raise ValidationError({"detail": "You have already completed the sociodemographic assessment."})
             if q_obj.is_posttest:
-                if not user.is_posttest_due:
-                    raise ValidationError({"detail": "Post-test is not available yet. Complete 7 days first."})
-                if user.has_completed_posttest:
-                    raise ValidationError({"detail": "You have already completed the post-test."})
+                milestone = request.data.get('milestone')
+                # If requested milestone is SIGNUP, skip posttest timing validation checks since T0 signup is always due
+                if milestone != 'SIGNUP':
+                    if not user.is_posttest_due:
+                        raise ValidationError({"detail": "Post-test is not available yet. Complete 7 days first."})
+                    if user.has_completed_posttest:
+                        raise ValidationError({"detail": "You have already completed the post-test."})
         except Questionnaire.DoesNotExist:
             pass
 

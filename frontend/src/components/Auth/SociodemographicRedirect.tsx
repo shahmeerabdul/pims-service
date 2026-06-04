@@ -8,25 +8,36 @@ const SociodemographicRedirect: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchSociodemographicId = async () => {
+    const fetchOnboardingQuestionnaire = async () => {
       try {
         const response = await questionnairesApi.list();
         const questionnaires = response.data;
+        const hasCompletedSociodemographic = localStorage.getItem('has_completed_sociodemographic') === 'true';
 
-        // Find the questionnaire with assessment_type === 'SOCIODEMOGRAPHIC'
-        const socio = questionnaires.find((q: any) => q.is_active && q.assessment_type === 'SOCIODEMOGRAPHIC');
-        if (socio) {
-          navigate(`/questionnaire/${socio.id}?milestone=SIGNUP`, { replace: true });
+        if (hasCompletedSociodemographic) {
+          // Find the questionnaire with assessment_type === 'PSYCHOMETRIC'
+          const battery = questionnaires.find((q: any) => q.is_active && q.assessment_type === 'PSYCHOMETRIC');
+          if (battery) {
+            navigate(`/questionnaire/${battery.id}?milestone=SIGNUP`, { replace: true });
+          } else {
+            setError('No active psychometric battery found. Please contact an administrator.');
+          }
         } else {
-          setError('No active sociodemographic assessment found. Please contact an administrator.');
+          // Find the questionnaire with assessment_type === 'SOCIODEMOGRAPHIC'
+          const socio = questionnaires.find((q: any) => q.is_active && q.assessment_type === 'SOCIODEMOGRAPHIC');
+          if (socio) {
+            navigate(`/questionnaire/${socio.id}?milestone=SIGNUP`, { replace: true });
+          } else {
+            setError('No active sociodemographic assessment found. Please contact an administrator.');
+          }
         }
       } catch (err) {
         setError('Failed to load assessment information. Please try again later.');
-        console.error('Sociodemographic fetch error:', err);
+        console.error('Onboarding redirect fetch error:', err);
       }
     };
 
-    fetchSociodemographicId();
+    fetchOnboardingQuestionnaire();
   }, [navigate]);
 
   if (error) {

@@ -25,11 +25,22 @@ def test_seed_longitudinal_scales_command_success(db):
     battery = Questionnaire.objects.get(title="Longitudinal Psychometric Scales")
     assert battery.assessment_type == 'PSYCHOMETRIC'
     assert battery.is_active is True
-    assert Question.objects.filter(questionnaire=battery).count() == 10
+    assert Question.objects.filter(questionnaire=battery).count() == 79
 
     # Verify options are correctly created for questions
     for question in Question.objects.filter(questionnaire=battery):
         assert Option.objects.filter(question=question).count() > 0
+
+    # Verify sequence order of scales in the battery
+    questions = Question.objects.filter(questionnaire=battery).order_by('order')
+    scale_order = []
+    for q in questions:
+        # extract scale group from content prefix e.g. [PERMA] -> PERMA
+        if q.content.startswith('[') and ']' in q.content:
+            group = q.content[1:q.content.index(']')]
+            if not scale_order or scale_order[-1] != group:
+                scale_order.append(group)
+    assert scale_order == ['PERMA', 'PHQ-9', 'GAD-7', 'PANAS', 'Gratitude', 'SIDAS']
 
 @pytest.mark.django_db
 def test_seed_longitudinal_scales_is_idempotent(db):

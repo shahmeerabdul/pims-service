@@ -12,6 +12,7 @@ class UserSerializer(serializers.ModelSerializer):
     """
     group_name = serializers.ReadOnlyField(source='group.name')
     role_name = serializers.ReadOnlyField(source='role.name')
+    due_milestone = serializers.CharField(source='get_due_milestone', read_only=True)
 
     class Meta:
         model = User
@@ -20,10 +21,10 @@ class UserSerializer(serializers.ModelSerializer):
             'whatsapp_number', 'date_of_birth', 'role', 'role_name', 
             'group', 'group_name', 'traits', 'created_at',
             'has_completed_sociodemographic',
-            'has_completed_posttest', 'is_posttest_due',
+            'has_completed_posttest', 'is_posttest_due', 'due_milestone',
             'completion_rate',
         )
-        read_only_fields = ('created_at', 'has_completed_sociodemographic', 'has_completed_posttest', 'is_posttest_due', 'completion_rate',)
+        read_only_fields = ('created_at', 'has_completed_sociodemographic', 'has_completed_posttest', 'is_posttest_due', 'due_milestone', 'completion_rate',)
 
 class SignupSerializer(serializers.ModelSerializer):
     """
@@ -149,6 +150,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'has_completed_sociodemographic': self.user.has_completed_sociodemographic,
             'has_completed_posttest': self.user.has_completed_posttest,
             'is_posttest_due': self.user.is_posttest_due,
+            'due_milestone': self.user.get_due_milestone,
         }
         
         return data
