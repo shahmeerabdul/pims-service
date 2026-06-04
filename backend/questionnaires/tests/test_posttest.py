@@ -69,6 +69,20 @@ def user_at_day7(db, participant_role):
 
 
 @pytest.fixture
+def user_at_day7_intervention(db, participant_role):
+    """User who is on Day 7 of the experiment (post-test not due yet)."""
+    user = User.objects.create_user(
+        username='day7_int_user',
+        email='day7_int@test.com',
+        password='testpass123',
+        role=participant_role,
+        has_completed_sociodemographic=True,
+        onboarding_completed_at=timezone.now() - timedelta(days=6),
+    )
+    return user
+
+
+@pytest.fixture
 def user_posttest_done(db, participant_role):
     """User who already completed the post-test."""
     user = User.objects.create_user(
@@ -96,6 +110,12 @@ def test_posttest_not_due_before_day7(user_before_day7):
 def test_posttest_due_at_day7(user_at_day7):
     """Post-test SHOULD be due at Day 7."""
     assert user_at_day7.is_posttest_due is True
+
+
+@pytest.mark.django_db
+def test_posttest_not_due_on_day7_intervention(user_at_day7_intervention):
+    """Post-test should NOT be due on Day 7 of the experiment (Experiment Day 7)."""
+    assert user_at_day7_intervention.is_posttest_due is False
 
 
 @pytest.mark.django_db
