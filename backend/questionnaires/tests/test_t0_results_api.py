@@ -58,18 +58,19 @@ def posttest_questionnaire(db):
     return q
 
 @pytest.mark.django_db
-class TestPosttestAPI:
-    def test_admin_can_list_posttests(self, api_client, admin_user, posttest_questionnaire, day7_user):
-        # Create a completed post-test
+class TestT0ResultsAPI:
+    def test_admin_can_list_t0_results(self, api_client, admin_user, posttest_questionnaire, day7_user):
+        # Create a completed T0 baseline response set
         rs = ResponseSet.objects.create(
             user=day7_user,
             questionnaire=posttest_questionnaire,
             status='COMPLETED',
+            milestone='SIGNUP',
             completed_at=timezone.now()
         )
         
         api_client.force_authenticate(user=admin_user)
-        url = '/api/questionnaires/posttests/'
+        url = '/api/questionnaires/t0-results/'
         response = api_client.get(url)
         
         assert response.status_code == status.HTTP_200_OK
@@ -77,9 +78,9 @@ class TestPosttestAPI:
         assert response.data['count'] == 1
         assert response.data['results'][0]['id'] == str(rs.id)
 
-    def test_participant_cannot_list_posttests(self, api_client, day7_user):
+    def test_participant_cannot_list_t0_results(self, api_client, day7_user):
         api_client.force_authenticate(user=day7_user)
-        url = '/api/questionnaires/posttests/'
+        url = '/api/questionnaires/t0-results/'
         response = api_client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 

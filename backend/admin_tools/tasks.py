@@ -25,20 +25,32 @@ def generate_posttest_export_csv(task_id):
         psy_questions = list(Question.objects.filter(questionnaire__assessment_type='PSYCHOMETRIC').order_by('order'))
 
         # 2. Build CSV Headers
-        headers = ['ParticipantID', 'Username', 'Group', 'DateOfBirth', 'PosttestStartedAt', 'PosttestCompletedAt']
+        headers = ['ParticipantID', 'Username', 'Group', 'DateOfBirth', 'T0StartedAt', 'T0CompletedAt']
         
         psy_columns = []
+        perma_codes = ["A1", "E1", "P1", "N1", "A2", "H1", "M1", "R1", "M2", "E2", "Lon", "H2", "P2", "N2", "A3", "N3", "E3", "H3", "R2", "M3", "R3", "P3", "Hap"]
+        tag_counters = {}
         for q in psy_questions:
             match = re.match(r'^\[([^\]]+)\]', q.content)
-            tag = re.sub(r'[^a-zA-Z0-9\-]', '', match.group(1)).upper() if match else "PSYCH"
-            headers.append(f"{tag}_Q{q.order}_7_DAYS")
+            tag = re.sub(r'[^a-zA-Z0-9]', '', match.group(1)).upper() if match else "PSYCH"
+            tag_counters[tag] = tag_counters.get(tag, 0) + 1
+            relative_order = tag_counters[tag]
+            
+            if tag == "PERMA":
+                code = perma_codes[relative_order - 1]
+                header_name = f"PERMA_{code.upper()}_SIGNUP"
+            else:
+                header_name = f"{tag}_Q{relative_order}_SIGNUP"
+                
+            headers.append(header_name)
             psy_columns.append(q.id)
 
-        # 3. Fetch Users who have completed the 7_DAYS milestone
+        # 3. Fetch Users who have completed the SIGNUP milestone baseline psychometrics
         User = get_user_model()
         users_qs = User.objects.filter(
             is_active=True,
-            response_sets__milestone='7_DAYS',
+            response_sets__milestone='SIGNUP',
+            response_sets__questionnaire__assessment_type='PSYCHOMETRIC',
             response_sets__status='COMPLETED'
         ).select_related('group').distinct().order_by('user_id')
 
@@ -51,17 +63,18 @@ def generate_posttest_export_csv(task_id):
         writer.writerow(headers)
 
         for user in users_qs.iterator(chunk_size=1000):
-            rs_7days = ResponseSet.objects.filter(
+            rs_t0 = ResponseSet.objects.filter(
                 user=user,
-                milestone='7_DAYS',
+                milestone='SIGNUP',
+                questionnaire__assessment_type='PSYCHOMETRIC',
                 status='COMPLETED'
             ).first()
 
-            if not rs_7days:
+            if not rs_t0:
                 continue
 
             responses = Response.objects.filter(
-                response_set=rs_7days
+                response_set=rs_t0
             ).select_related('question', 'selected_option')
 
             resp_map = {r.question_id: r for r in responses}
@@ -71,11 +84,11 @@ def generate_posttest_export_csv(task_id):
                 user.username,
                 user.group.name if user.group else 'None',
                 user.date_of_birth.strftime('%Y-%m-%d') if user.date_of_birth else '',
-                rs_7days.started_at.strftime('%Y-%m-%d %H:%M:%S') if rs_7days.started_at else '',
-                rs_7days.completed_at.strftime('%Y-%m-%d %H:%M:%S') if rs_7days.completed_at else '',
+                rs_t0.started_at.strftime('%Y-%m-%d %H:%M:%S') if rs_t0.started_at else '',
+                rs_t0.completed_at.strftime('%Y-%m-%d %H:%M:%S') if rs_t0.completed_at else '',
             ]
 
-            # Psy answers at 7_DAYS
+            # Psy answers at SIGNUP
             for q_id in psy_columns:
                 ans = resp_map.get(q_id)
                 if ans:
@@ -86,7 +99,7 @@ def generate_posttest_export_csv(task_id):
 
             writer.writerow(row)
 
-        file_name = f"posttest_export_{task.id}.csv"
+        file_name = f"t0_export_{task.id}.csv"
         task.file.save(file_name, ContentFile(output.getvalue().encode('utf-8')))
         task.status = 'SUCCESS'
         task.save()
@@ -143,11 +156,23 @@ def generate_longitudinal_export_csv(task_id):
         # Map tuples of (question_id, milestone) to columns
         psy_columns = []
         milestones = ['SIGNUP', '7_DAYS', '3_MONTHS', '6_MONTHS', '1_YEAR']
+        perma_codes = ["A1", "E1", "P1", "N1", "A2", "H1", "M1", "R1", "M2", "E2", "Lon", "H2", "P2", "N2", "A3", "N3", "E3", "H3", "R2", "M3", "R3", "P3", "Hap"]
+        
         for milestone in milestones:
+            tag_counters = {}
             for q in psy_questions:
                 match = re.match(r'^\[([^\]]+)\]', q.content)
-                tag = re.sub(r'[^a-zA-Z0-9\-]', '', match.group(1)).upper() if match else "PSYCH"
-                headers.append(f"{tag}_Q{q.order}_{milestone}")
+                tag = re.sub(r'[^a-zA-Z0-9]', '', match.group(1)).upper() if match else "PSYCH"
+                tag_counters[tag] = tag_counters.get(tag, 0) + 1
+                relative_order = tag_counters[tag]
+                
+                if tag == "PERMA":
+                    code = perma_codes[relative_order - 1]
+                    header_name = f"PERMA_{code.upper()}_{milestone}"
+                else:
+                    header_name = f"{tag}_Q{relative_order}_{milestone}"
+                    
+                headers.append(header_name)
                 psy_columns.append((q.id, milestone))
 
         # 4. Fetch Users

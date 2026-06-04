@@ -145,9 +145,9 @@ class ResponseSetSaveDraftView(generics.UpdateAPIView):
     def post(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
-class AdminPosttestResponseListView(generics.ListAPIView):
+class AdminT0ResponseListView(generics.ListAPIView):
     """
-    Researcher-only view to list all completed Day 7 post-test assessments.
+    Researcher-only view to list all completed T0 baseline psychometric assessments.
     """
     serializer_class = AdminResponseSetSerializer
     permission_classes = (permissions.IsAdminUser,)
@@ -155,20 +155,22 @@ class AdminPosttestResponseListView(generics.ListAPIView):
 
     def get_queryset(self):
         return ResponseSet.objects.filter(
-            questionnaire__is_posttest=True,
+            milestone='SIGNUP',
+            questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
         ).select_related('user', 'questionnaire').order_by('-completed_at')
 
-class AdminPosttestResponseDetailView(generics.RetrieveAPIView):
+class AdminT0ResponseDetailView(generics.RetrieveAPIView):
     """
-    Researcher-only view to inspect a specific post-test submission.
+    Researcher-only view to inspect a specific T0 baseline psychometric submission.
     """
     serializer_class = AdminResponseSetSerializer
     permission_classes = (permissions.IsAdminUser,)
 
     def get_queryset(self):
         return ResponseSet.objects.filter(
-            questionnaire__is_posttest=True,
+            milestone='SIGNUP',
+            questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
         ).select_related('user', 'questionnaire').prefetch_related(
             'responses__question',

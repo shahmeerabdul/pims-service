@@ -12,7 +12,7 @@ const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const GroupsManagementPage = lazy(() => import('./pages/GroupsManagementPage'));
 const GroupDetailPage = lazy(() => import('./pages/GroupDetailPage'));
-const AdminPosttestResultsPage = lazy(() => import('./pages/AdminPosttestResultsPage'));
+const AdminT0ResultsPage = lazy(() => import('./pages/AdminT0ResultsPage'));
 const AdminSupportQueriesPage = lazy(() => import('./pages/AdminSupportQueriesPage'));
 const AdminLayout = lazy(() => import('./components/Admin/AdminLayout'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
@@ -63,7 +63,7 @@ const App: React.FC = () => {
                   <Route path="/admin" element={<AdminDashboardPage />} />
                   <Route path="/admin/groups" element={<GroupsManagementPage />} />
                   <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
-                 <Route path="/admin/posttest-data" element={<AdminPosttestResultsPage />} />
+                 <Route path="/admin/t0-data" element={<AdminT0ResultsPage />} />
                  <Route path="/admin/support-queries" element={<AdminSupportQueriesPage />} />
               </Route>
 

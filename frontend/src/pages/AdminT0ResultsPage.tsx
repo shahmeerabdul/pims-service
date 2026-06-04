@@ -40,7 +40,7 @@ interface PosttestSet {
   responses?: RawResponse[];
 }
 
-const AdminPosttestResultsPage: React.FC = () => {
+const AdminT0ResultsPage: React.FC = () => {
   const [submissions, setSubmissions] = useState<PosttestSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ const AdminPosttestResultsPage: React.FC = () => {
   const fetchSubmissions = async (page: number = 1) => {
     setLoading(true);
     try {
-      const response = await questionnairesApi.getAdminPosttestResponses(page);
+      const response = await questionnairesApi.getAdminT0Responses(page);
       
       const data = response.data;
       if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
@@ -80,8 +80,8 @@ const AdminPosttestResultsPage: React.FC = () => {
       setCurrentPage(page);
       setError(null);
     } catch (err) {
-      console.error('Failed to fetch post-test responses', err);
-      setError('Failed to load post-test data. Please verify administrative privileges.');
+      console.error('Failed to fetch T0 baseline responses', err);
+      setError('Failed to load T0 baseline data. Please verify administrative privileges.');
       setSubmissions([]);
     } finally {
       setLoading(false);
@@ -109,7 +109,7 @@ const AdminPosttestResultsPage: React.FC = () => {
             setExportStatus(null);
             const link = document.createElement('a');
             link.href = file_url;
-            link.setAttribute('download', 'posttest_export.csv');
+            link.setAttribute('download', 't0_baseline_export.csv');
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -131,7 +131,7 @@ const AdminPosttestResultsPage: React.FC = () => {
 
   const handleViewDetail = async (id: string) => {
     try {
-      const response = await questionnairesApi.getAdminPosttestDetail(id);
+      const response = await questionnairesApi.getAdminT0Detail(id);
       setSelectedSubmission(response.data);
     } catch (err) {
       console.error('Failed to fetch submission detail', err);
@@ -141,11 +141,11 @@ const AdminPosttestResultsPage: React.FC = () => {
   const handleExport = async () => {
     try {
       setExportStatus('PENDING');
-      const response = await questionnairesApi.triggerAdminPosttestExport(selectedGroup);
+      const response = await questionnairesApi.triggerAdminT0Export(selectedGroup);
       setExportingId(response.data.task_id);
       setError(null);
     } catch (err) {
-      console.error('Failed to export posttest data', err);
+      console.error('Failed to export T0 baseline data', err);
       setError('Failed to initiate CSV export. Please check server logs.');
       setExportStatus(null);
     }
@@ -165,7 +165,7 @@ const AdminPosttestResultsPage: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <RotateCw className="w-8 h-8 text-zinc-400 animate-spin" />
-        <p className="text-zinc-500 font-medium text-sm">Loading post-test data...</p>
+        <p className="text-zinc-500 font-medium text-sm">Loading T0 baseline data...</p>
       </div>
     );
   }
@@ -175,10 +175,10 @@ const AdminPosttestResultsPage: React.FC = () => {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-200 pb-6">
         <div className="space-y-1 flex-1">
           <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium mb-1">
-            <ClipboardCheck size={14} /> Day 7 Post-Test Data
+            <ClipboardCheck size={14} /> T0 Baseline Data
           </div>
-          <h1 className="text-3xl font-bold text-zinc-900">Post-Test Results</h1>
-          <p className="text-zinc-500 text-sm">Day 7 reassessment data from completed participants</p>
+          <h1 className="text-3xl font-bold text-zinc-900">T0 Baseline Results</h1>
+          <p className="text-zinc-500 text-sm">T0 baseline psychometric quiz results from completed participants</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
@@ -311,7 +311,7 @@ const AdminPosttestResultsPage: React.FC = () => {
                 {filteredSubmissions.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-6 py-16 text-center text-zinc-400 italic text-sm">
-                      No post-test submissions yet. Results will appear here when participants complete Day 7.
+                      No T0 baseline submissions yet. Results will appear here when participants complete their signup questionnaires.
                     </td>
                   </tr>
                 )}
@@ -368,7 +368,7 @@ const AdminPosttestResultsPage: React.FC = () => {
             >
               <div className="p-6 border-b border-zinc-200 flex items-center justify-between">
                 <div>
-                  <h3 className="text-xl font-bold text-zinc-900">Post-Test Response Detail</h3>
+                  <h3 className="text-xl font-bold text-zinc-900">T0 Response Detail</h3>
                   <p className="text-sm text-zinc-500 mt-0.5">{selectedSubmission.full_name}</p>
                 </div>
                 <button
@@ -437,4 +437,4 @@ const AdminPosttestResultsPage: React.FC = () => {
   );
 };
 
-export default AdminPosttestResultsPage;
+export default AdminT0ResultsPage;

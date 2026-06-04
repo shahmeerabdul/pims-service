@@ -28,8 +28,8 @@ def test_admin_export_csv(admin_client, test_user):
 
 @pytest.mark.django_db
 @patch('admin_tools.views.generate_posttest_export_csv.delay')
-def test_admin_export_posttest_csv(mock_delay, admin_client):
-    url = reverse('export_posttest_csv')
+def test_admin_export_t0_csv(mock_delay, admin_client):
+    url = reverse('export_t0_csv')
     response = admin_client.post(url, {'group': 'Control'})
 
     assert response.status_code == status.HTTP_202_ACCEPTED
@@ -336,8 +336,8 @@ def test_generate_longitudinal_export_csv_task(admin_user, test_group):
     headers = rows[0]
     assert 'ParticipantID' in headers
     assert 'Socio_Gender' in headers
-    assert 'PERMA_Q1_SIGNUP' in headers
-    assert 'PERMA_Q1_7_DAYS' in headers
+    assert 'PERMA_A1_SIGNUP' in headers
+    assert 'PERMA_A1_7_DAYS' in headers
 
     # Check Data Row
     data_row = rows[1]
@@ -367,15 +367,15 @@ def test_generate_posttest_export_csv_task(admin_user, test_group):
     )
     opt_joy = Option.objects.create(question=perma_q, label="10 - Completely", numeric_value=10, order=10)
 
-    # 2. Create a participant user who completed 7_DAYS milestone
+    # 2. Create a participant user who completed SIGNUP milestone
     from users.models import User
     user = User.objects.create_user(
         username="posttest_participant", email="pp@example.com", password="password",
         group=test_group, has_completed_sociodemographic=True
     )
 
-    # 3. Create completed response set for 7_DAYS milestone
-    rs_posttest = ResponseSet.objects.create(user=user, questionnaire=psy_q, status='COMPLETED', milestone='7_DAYS')
+    # 3. Create completed response set for SIGNUP milestone
+    rs_posttest = ResponseSet.objects.create(user=user, questionnaire=psy_q, status='COMPLETED', milestone='SIGNUP')
     Response.objects.create(response_set=rs_posttest, question=perma_q, selected_option=opt_joy)
 
     # 4. Trigger the export task
@@ -397,7 +397,7 @@ def test_generate_posttest_export_csv_task(admin_user, test_group):
     # Check Headers
     headers = rows[0]
     assert 'ParticipantID' in headers
-    assert 'PERMA_Q1_7_DAYS' in headers
+    assert 'PERMA_A1_SIGNUP' in headers
 
     # Check Data Row
     data_row = rows[1]

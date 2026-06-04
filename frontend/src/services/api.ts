@@ -82,11 +82,11 @@ export const questionnairesApi = {
   // Administrative Operations
   getAnalyticsSummary: () => api.get('/questionnaires/analytics/all/'),
 
-  getAdminPosttestResponses: (page: number = 1) => api.get(`/questionnaires/posttests/?page=${page}`),
-  getAdminPosttestDetail: (id: string) => api.get(`/questionnaires/posttests/${id}/`),
+  getAdminT0Responses: (page: number = 1) => api.get(`/questionnaires/t0-results/?page=${page}`),
+  getAdminT0Detail: (id: string) => api.get(`/questionnaires/t0-results/${id}/`),
   getDashboardAnalytics: () => api.get('/admin/tools/dashboard-analytics/'),
 
-  triggerAdminPosttestExport: (groupName?: string) => api.post('/admin/tools/export/posttests/csv/', {
+  triggerAdminT0Export: (groupName?: string) => api.post('/admin/tools/export/t0/csv/', {
     group: groupName || 'All'
   }),
   triggerAdminLongitudinalExport: (groupName?: string) => api.post('/admin/tools/export/longitudinal/csv/', {

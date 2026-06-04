@@ -38,7 +38,7 @@ class ExportDataCSVView(APIView):
 
         return response
 
-class ExportPosttestDataCSVView(APIView):
+class ExportT0DataCSVView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
@@ -56,7 +56,7 @@ class ExportPosttestDataCSVView(APIView):
                 'status': task.status
             }, status=202)
         except Exception as e:
-            logger.error(f"Failed to trigger posttest export: {e}")
+            logger.error(f"Failed to trigger T0 baseline export: {e}")
             return Response({"detail": "Failed to initiate export process."}, status=500)
 
 
