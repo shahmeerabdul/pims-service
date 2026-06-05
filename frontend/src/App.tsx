@@ -19,6 +19,7 @@ const AdminT3ResultsPage = lazy(() => import('./pages/AdminT3ResultsPage'));
 const AdminT4ResultsPage = lazy(() => import('./pages/AdminT4ResultsPage'));
 const AdminSupportQueriesPage = lazy(() => import('./pages/AdminSupportQueriesPage'));
 const AdminFollowUpsPage = lazy(() => import('./pages/AdminFollowUpsPage'));
+const AdminSuicideRiskPage = lazy(() => import('./pages/AdminSuicideRiskPage'));
 const AdminLayout = lazy(() => import('./components/Admin/AdminLayout'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ResultsPage = lazy(() => import('./pages/ResultsPage'));
@@ -75,6 +76,7 @@ const App: React.FC = () => {
                  <Route path="/admin/t4-data" element={<AdminT4ResultsPage />} />
                  <Route path="/admin/support-queries" element={<AdminSupportQueriesPage />} />
                  <Route path="/admin/follow-ups" element={<AdminFollowUpsPage />} />
+                 <Route path="/admin/safety-risk" element={<AdminSuicideRiskPage />} />
               </Route>
 
               {/* Fallback */}

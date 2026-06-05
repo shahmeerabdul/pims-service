@@ -282,6 +282,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'notifications.tasks.run_assessment_graduated_reminders',
         'schedule': crontab(hour=2, minute=0),
     },
+    'daily-suicide-risk-admin-cache': {
+        'task': 'questionnaires.tasks.refresh_suicide_risk_admin_cache_task',
+        'schedule': crontab(hour=3, minute=0),
+    },
 }
 # Spectacular Settings
 SPECTACULAR_SETTINGS = {

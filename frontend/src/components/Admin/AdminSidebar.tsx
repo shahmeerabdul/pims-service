@@ -6,7 +6,8 @@ import {
   Database,
   ClipboardCheck,
   MessageSquare,
-  PhoneCall
+  PhoneCall,
+  ShieldAlert
 } from 'lucide-react';
 import api from '../../services/api';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -45,6 +46,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate }) => {
     { label: 'Groups Management', path: '/admin/groups', icon: <Users size={18} /> },
     { label: 'User Queries', path: '/admin/support-queries', icon: <MessageSquare size={18} />, badge: openQueriesCount },
     { label: 'Follow-ups', path: '/admin/follow-ups', icon: <PhoneCall size={18} /> },
+    { label: 'Safety Risk', path: '/admin/safety-risk', icon: <ShieldAlert size={18} /> },
   ];
 
   return (

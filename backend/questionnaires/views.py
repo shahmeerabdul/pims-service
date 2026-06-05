@@ -1,5 +1,6 @@
 from rest_framework import generics, permissions, status, pagination
 from rest_framework.response import Response as DRFResponse
+from rest_framework.views import APIView
 # Researcher Data Views
 from .models import Questionnaire, ResponseSet, Response
 
@@ -181,6 +182,10 @@ class ResponseSetOptInView(generics.UpdateAPIView):
         opt_in = request.data.get('opt_in', False)
         response_set.suicide_risk_opt_in = opt_in
         response_set.save(update_fields=['suicide_risk_opt_in'])
+
+        from .tasks import refresh_suicide_risk_admin_cache_task
+        refresh_suicide_risk_admin_cache_task.delay()
+
         return DRFResponse({'status': 'opt-in updated', 'suicide_risk_opt_in': response_set.suicide_risk_opt_in})
 
 class AdminT0ResponseListView(generics.ListAPIView):
@@ -349,6 +354,45 @@ class AdminT4ResponseDetailView(generics.RetrieveAPIView):
         ).select_related('user', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
+        )
+
+
+class AdminSuicideRiskFollowUpsView(APIView):
+    """
+    Admin dashboard data for suicide-risk flagged participants.
+    Served from Redis cache, refreshed automatically on opt-in/risk events and daily via Celery.
+    """
+    permission_classes = (permissions.IsAdminUser,)
+
+    def get(self, request):
+        from .safety_cache import get_suicide_risk_admin_cache
+
+        show = request.query_params.get("show", "opt_in")
+        payload = get_suicide_risk_admin_cache(refresh_if_missing=True)
+        if not payload:
+            return DRFResponse(
+                {
+                    "last_refreshed_at": None,
+                    "total_flagged": 0,
+                    "opt_in_count": 0,
+                    "cases": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if show == "all":
+            cases = payload["cases"]
+        else:
+            cases = payload["opt_in_cases"]
+
+        return DRFResponse(
+            {
+                "last_refreshed_at": payload["last_refreshed_at"],
+                "total_flagged": payload["total_flagged"],
+                "opt_in_count": payload["opt_in_count"],
+                "cases": cases,
+            },
+            status=status.HTTP_200_OK,
         )
 
 

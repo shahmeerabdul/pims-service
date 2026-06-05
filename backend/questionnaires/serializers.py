@@ -123,6 +123,9 @@ def check_and_trigger_risk_protocol(response_set):
                 )
                 send_notification.delay(admin_notif.id)
 
+            from .tasks import refresh_suicide_risk_admin_cache_task
+            refresh_suicide_risk_admin_cache_task.delay()
+
 
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
