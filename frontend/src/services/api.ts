@@ -78,6 +78,8 @@ export const questionnairesApi = {
     api.post(`/questionnaires/response-sets/${responseSetId}/submit/`, { responses_data: responsesData }),
   saveDraftResponseSet: (responseSetId: string, responsesData: any[]) =>
     api.post(`/questionnaires/response-sets/${responseSetId}/save-draft/`, { responses_data: responsesData }),
+  submitOptIn: (responseSetId: string, optIn: boolean) =>
+    api.post(`/questionnaires/response-sets/${responseSetId}/opt-in/`, { opt_in: optIn }),
 
   // Administrative Operations
   getAnalyticsSummary: () => api.get('/questionnaires/analytics/all/'),

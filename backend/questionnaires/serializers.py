@@ -59,6 +59,10 @@ def check_and_trigger_risk_protocol(response_set):
         reasons.append(f"SIDAS Total with score {sidas_total} (High suicide risk)")
 
     if triggered:
+        if not response_set.suicide_risk_triggered:
+            response_set.suicide_risk_triggered = True
+            response_set.save(update_fields=['suicide_risk_triggered'])
+
         cache_key = f"risk_alert_triggered_{response_set.id}"
         
         if not cache.get(cache_key):
@@ -72,10 +76,41 @@ def check_and_trigger_risk_protocol(response_set):
                 user.username, user.id, user.email, reasons_str
             )
             
+            from notifications.tasks import send_notification
+            
+            # 1. Create and send participant safety panel resources (Email + WhatsApp)
+            participant_message = (
+                "Your responses suggest you may be experiencing distress. To protect your well-being, "
+                "please reach out to one of the support services below. You are not alone.\n\n"
+                "Umang 0311-7786264 (24/7, free, multilingual)\n"
+                "Taskeen 0316-8275336 (Mon–Sat 11am–11pm) + 24/7 chatbot at taskeen.org\n"
+                "Rozan 0304-1118666 / 0800-22444 (Mon–Sat)\n"
+                "Emergency Rescue 1122, Edhi 115, Chhipa 1020"
+            )
+            
+            p_email = Notification.objects.create(
+                user=user,
+                n_type='email',
+                message=participant_message,
+                scheduled_time=timezone.now(),
+                status='pending'
+            )
+            send_notification.delay(p_email.id)
+            
+            p_whatsapp = Notification.objects.create(
+                user=user,
+                n_type='whatsapp',
+                message=participant_message,
+                scheduled_time=timezone.now(),
+                status='pending'
+            )
+            send_notification.delay(p_whatsapp.id)
+            
+            # 2. Notify admins
             User = get_user_model()
             admins = User.objects.filter(is_staff=True)
             for admin in admins:
-                Notification.objects.create(
+                admin_notif = Notification.objects.create(
                     user=admin,
                     n_type='email',
                     message=(
@@ -86,6 +121,7 @@ def check_and_trigger_risk_protocol(response_set):
                     scheduled_time=timezone.now(),
                     status='pending'
                 )
+                send_notification.delay(admin_notif.id)
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -119,8 +155,8 @@ class ResponseSetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResponseSet
-        fields = ['id', 'user', 'questionnaire', 'questionnaire_title', 'status', 'started_at', 'completed_at', 'responses', 'milestone']
-        read_only_fields = ['user', 'started_at', 'completed_at', 'status']
+        fields = ['id', 'user', 'questionnaire', 'questionnaire_title', 'status', 'started_at', 'completed_at', 'responses', 'milestone', 'suicide_risk_triggered', 'suicide_risk_opt_in']
+        read_only_fields = ['user', 'started_at', 'completed_at', 'status', 'suicide_risk_triggered', 'suicide_risk_opt_in']
 
 class ResponseSetDetailSerializer(serializers.ModelSerializer):
     """Full detail serializer with nested questionnaire for the Results page."""
@@ -129,7 +165,7 @@ class ResponseSetDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResponseSet
-        fields = ['id', 'user', 'questionnaire', 'status', 'started_at', 'completed_at', 'responses']
+        fields = ['id', 'user', 'questionnaire', 'status', 'started_at', 'completed_at', 'responses', 'suicide_risk_triggered', 'suicide_risk_opt_in']
 
 class AdminResponseSerializer(serializers.ModelSerializer):
     question_text = serializers.CharField(source='question.content', read_only=True)
@@ -179,7 +215,8 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResponseSet
-        fields = ['id', 'responses_data']
+        fields = ['id', 'responses_data', 'suicide_risk_triggered', 'suicide_risk_opt_in']
+        read_only_fields = ['suicide_risk_triggered', 'suicide_risk_opt_in']
 
     def validate(self, attrs):
         response_set = self.instance
@@ -286,7 +323,8 @@ class ResponseSetDraftSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResponseSet
-        fields = ['id', 'responses_data']
+        fields = ['id', 'responses_data', 'suicide_risk_triggered', 'suicide_risk_opt_in']
+        read_only_fields = ['suicide_risk_triggered', 'suicide_risk_opt_in']
 
     def validate(self, attrs):
         response_set = self.instance

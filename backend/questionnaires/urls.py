@@ -7,6 +7,7 @@ from .views import (
     ResponseSetDetailView,
     ResponseSetSubmitView,
     ResponseSetSaveDraftView,
+    ResponseSetOptInView,
     AdminT0ResponseListView,
     AdminT0ResponseDetailView,
     AdminT1ResponseListView,
@@ -47,6 +48,7 @@ urlpatterns = [
     # Response Management
     path('response-sets/<uuid:pk>/submit/', ResponseSetSubmitView.as_view(), name='response_set_submit'),
     path('response-sets/<uuid:pk>/save-draft/', ResponseSetSaveDraftView.as_view(), name='response_set_save_draft'),
+    path('response-sets/<uuid:pk>/opt-in/', ResponseSetOptInView.as_view(), name='response_set_opt_in'),
     
     # Analytics & Export
     path('analytics/all/', GlobalQuestionnaireAnalyticsView.as_view(), name='global_questionnaire_analytics'),

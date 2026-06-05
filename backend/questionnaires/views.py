@@ -59,6 +59,14 @@ class ResponseSetListCreateView(generics.ListCreateAPIView):
         if existing_set:
             serializer = self.get_serializer(existing_set)
             return DRFResponse(serializer.data, status=status.HTTP_200_OK)
+
+        # Check if they have already completed this assessment
+        if ResponseSet.objects.filter(
+            user=user,
+            questionnaire_id=questionnaire_id,
+            milestone=milestone
+        ).exists():
+            raise ValidationError({"detail": "You have already completed this assessment."})
             
         # If they already completed it (not just draft), block it based on assessment type logic
         try:
@@ -155,6 +163,25 @@ class ResponseSetSaveDraftView(generics.UpdateAPIView):
 
     def post(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
+
+class ResponseSetOptInView(generics.UpdateAPIView):
+    """
+    Endpoint to update the opt-in status for safety protocol.
+    """
+    queryset = ResponseSet.objects.all()
+    permission_classes = (permissions.IsAuthenticated,)
+    http_method_names = ['post', 'put', 'patch']
+
+    def get_queryset(self):
+        # Users can only update their own response sets
+        return super().get_queryset().filter(user=self.request.user)
+
+    def post(self, request, *args, **kwargs):
+        response_set = self.get_object()
+        opt_in = request.data.get('opt_in', False)
+        response_set.suicide_risk_opt_in = opt_in
+        response_set.save(update_fields=['suicide_risk_opt_in'])
+        return DRFResponse({'status': 'opt-in updated', 'suicide_risk_opt_in': response_set.suicide_risk_opt_in})
 
 class AdminT0ResponseListView(generics.ListAPIView):
     """

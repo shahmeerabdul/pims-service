@@ -86,6 +86,8 @@ class ResponseSet(models.Model):
     )
     milestone = models.CharField(max_length=15, choices=MILESTONES, db_index=True, null=True, blank=True)
     scores = models.JSONField(default=dict, blank=True, help_text="Calculated subscale and total scores on submission")
+    suicide_risk_triggered = models.BooleanField(default=False)
+    suicide_risk_opt_in = models.BooleanField(null=True, blank=True)
 
     class Meta:
         indexes = [

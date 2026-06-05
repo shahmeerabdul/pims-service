@@ -368,3 +368,90 @@ def test_battery_scoring_and_sidas_risk_triggers(seeded_db, participant_user, ad
     assert response_set_4.scores['SIDAS_TOTAL'] == 23
     assert Notification.objects.filter(user=admin_user).count() == 1
     assert "high suicide risk" in Notification.objects.filter(user=admin_user).first().message.lower()
+
+
+@pytest.mark.django_db
+def test_suicide_risk_protocol_opt_in_flow(seeded_db, participant_user, admin_user):
+    from rest_framework.test import APIClient
+    client = APIClient()
+    client.force_authenticate(user=participant_user)
+    
+    battery = Questionnaire.objects.get(title="Longitudinal Psychometric Scales")
+    item_9 = Question.objects.filter(questionnaire=battery, content__icontains="dead").first()
+    risk_option = Option.objects.get(question=item_9, numeric_value=2) # Score 2 >= 1
+    
+    response_set = ResponseSet.objects.create(
+        user=participant_user,
+        questionnaire=battery,
+        status='DRAFT'
+    )
+    
+    responses_payload = []
+    for question in battery.questions.all():
+        if question == item_9:
+            responses_payload.append({
+                "question_id": str(question.id),
+                "selected_option_id": str(risk_option.id)
+            })
+        elif question.type == 'SCALE':
+            opt = question.options.first()
+            responses_payload.append({
+                "question_id": str(question.id),
+                "selected_option_id": str(opt.id)
+            })
+            
+    # Submit via API
+    url = f"/api/questionnaires/response-sets/{response_set.id}/submit/"
+    response = client.post(url, {"responses_data": responses_payload}, format='json')
+    assert response.status_code == 200
+    
+    # Check that response data flags suicide risk
+    assert response.data['suicide_risk_triggered'] is True
+    
+    # Reload and assert ResponseSet model fields
+    response_set.refresh_from_db()
+    assert response_set.suicide_risk_triggered is True
+    assert response_set.suicide_risk_opt_in is None
+    
+    # Verify participant notifications are created for email and whatsapp
+    participant_notifications = Notification.objects.filter(user=participant_user)
+    assert participant_notifications.filter(n_type='email').exists()
+    assert participant_notifications.filter(n_type='whatsapp').exists()
+    
+    # Post to opt-in endpoint
+    opt_in_url = f"/api/questionnaires/response-sets/{response_set.id}/opt-in/"
+    opt_in_res = client.post(opt_in_url, {"opt_in": True}, format='json')
+    assert opt_in_res.status_code == 200
+    assert opt_in_res.data['suicide_risk_opt_in'] is True
+    
+    # Reload and check database
+    response_set.refresh_from_db()
+    assert response_set.suicide_risk_opt_in is True
+
+
+@pytest.mark.django_db
+def test_duplicate_response_set_prevention(seeded_db, participant_user):
+    from rest_framework.test import APIClient
+    client = APIClient()
+    client.force_authenticate(user=participant_user)
+    
+    battery = Questionnaire.objects.get(title="Longitudinal Psychometric Scales")
+    
+    # Create the first response set (COMPLETED)
+    ResponseSet.objects.create(
+        user=participant_user,
+        questionnaire=battery,
+        milestone='SIGNUP',
+        status='COMPLETED'
+    )
+    
+    # Try to create another one via POST
+    url = "/api/questionnaires/response-sets/"
+    response = client.post(url, {
+        "questionnaire": str(battery.id),
+        "milestone": "SIGNUP"
+    }, format='json')
+    
+    assert response.status_code == 400
+    assert "already completed" in response.data['detail'].lower()
+

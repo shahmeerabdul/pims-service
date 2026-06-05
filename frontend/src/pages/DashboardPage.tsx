@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api, { questionnairesApi } from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { Calendar, CheckCircle2, Clock, ArrowRight, Bell, FileText, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, ArrowRight, FileText, ClipboardCheck, AlertTriangle } from 'lucide-react';
 
 const DashboardPage: React.FC = () => {
   const [activities, setActivities] = useState<any[]>([]);
@@ -13,18 +13,17 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { t } = useTranslation();
 
-  const [notifications, setNotifications] = useState<any[]>([]);
+
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [actRes, phaseRes, subRes, activitySubRes, profileRes, notifRes] = await Promise.all([
+        const [actRes, phaseRes, subRes, activitySubRes, profileRes] = await Promise.all([
           api.get('/activities/daily/current/').catch(() => ({ data: null })),
           api.get('/phases/current/').catch(() => ({ data: null })),
           api.get('/questionnaires/response-sets/').catch(() => ({ data: { results: [] } })),
           api.get('/activities/all-submissions/').catch(() => ({ data: { results: [] } })),
-          api.get('/users/profile/').catch(() => ({ data: null })),
-          api.get('/notifications/').catch(() => ({ data: [] }))
+          api.get('/users/profile/').catch(() => ({ data: null }))
         ]);
 
         const actData = actRes.data;
@@ -37,9 +36,7 @@ const DashboardPage: React.FC = () => {
           localStorage.setItem('due_milestone', profileRes.data.due_milestone || '');
         }
         
-        // Handle notifications
-        const notifData = Array.isArray(notifRes.data) ? notifRes.data : notifRes.data?.results || [];
-        setNotifications(notifData.slice(0, 3));
+
 
         // If user is due for a milestone, find the psychometric questionnaire
         if (profileRes.data?.due_milestone) {
@@ -264,23 +261,7 @@ const DashboardPage: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          <div className="border border-zinc-200 rounded-xl p-6 bg-zinc-800 text-white shadow-sm">
-            <div className="flex items-center gap-2 font-semibold text-xs mb-4 text-zinc-300 uppercase tracking-wider">
-              <Bell size={14} /> {t('dashboard.notifications')}
-            </div>
-            {notifications.length > 0 ? (
-              <div className="space-y-4">
-                {notifications.map((n) => (
-                  <div key={n.id} className="text-sm leading-relaxed border-b border-zinc-700 pb-2 last:border-0">
-                    {n.message}
-                    <div className="text-[10px] text-zinc-400 mt-1">{new Date(n.created_at).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm italic text-zinc-400">No new notifications</p>
-            )}
-          </div>
+
 
           <div className="border border-zinc-200 rounded-xl p-6 text-center bg-white shadow-sm">
             <div className="inline-block p-5 rounded-xl bg-zinc-800 text-white mb-4">

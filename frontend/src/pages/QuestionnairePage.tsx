@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { questionnairesApi } from '../services/api';
 import LikertSlider from '../components/Questionnaire/LikertSlider';
 import SociodemographicForm from '../components/Questionnaire/SociodemographicForm';
+import SafetyPanelModal from '../components/Questionnaire/SafetyPanelModal';
 import {
   Loader2,
   ArrowLeft,
@@ -22,6 +23,18 @@ const SCALE_NAMES: Record<string, string> = {
   'SIDAS': 'Suicidal Ideation (SIDAS)',
 };
 
+const getNumericValueForResponse = (question: any, responseValue: any): number | undefined => {
+  if (responseValue === undefined || responseValue === null) return undefined;
+  if (typeof responseValue === 'number') return responseValue;
+  if (typeof responseValue === 'string') {
+    const opt = question.options?.find((o: any) => o.id === responseValue);
+    if (opt) return opt.numeric_value;
+    const parsed = parseInt(responseValue, 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return undefined;
+};
+
 const QuestionnairePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -38,6 +51,11 @@ const QuestionnairePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [showSafetyPanel, setShowSafetyPanel] = useState(false);
+  const [submittingOptIn, setSubmittingOptIn] = useState(false);
+  const [hasShownSafetyPanel, setHasShownSafetyPanel] = useState(false);
+  const [safetyPanelPendingAction, setSafetyPanelPendingAction] = useState<'next' | 'submit' | null>(null);
 
   useEffect(() => {
     return () => {
@@ -71,8 +89,10 @@ const QuestionnairePage: React.FC = () => {
         }
       } catch (err: any) {
         const detail = err.response?.data?.detail;
-        if (detail && detail.includes('already completed the sociodemographic')) {
-          localStorage.setItem('has_completed_sociodemographic', 'true');
+        if (detail && (detail.includes('already completed') || detail.includes('not available yet'))) {
+          if (detail.includes('sociodemographic')) {
+            localStorage.setItem('has_completed_sociodemographic', 'true');
+          }
           navigate('/dashboard', { replace: true });
         } else {
           setError(detail || 'Failed to initialize questionnaire session.');
@@ -194,7 +214,74 @@ const QuestionnairePage: React.FC = () => {
     }, 500);
   };
 
+  const checkSuicideRiskLocal = (): boolean => {
+    // 1. PHQ-9 Item 9 >= 1
+    const phq9Item9Q = questions.find((q: any) => 
+      q.order === 32 || 
+      (q.content.includes('[PHQ-9]') && q.content.toLowerCase().includes('dead'))
+    );
+    if (phq9Item9Q) {
+      const val = getNumericValueForResponse(phq9Item9Q, responses[phq9Item9Q.id]);
+      if (val !== undefined && val >= 1) {
+        return true;
+      }
+    }
+
+    // 2. SIDAS Item 3 > 0
+    const sidasItem3Q = questions.find((q: any) => q.order === 77);
+    if (sidasItem3Q) {
+      const val = getNumericValueForResponse(sidasItem3Q, responses[sidasItem3Q.id]);
+      if (val !== undefined && val > 0) {
+        return true;
+      }
+    }
+
+    // 3. SIDAS Total >= 21
+    const sidasQ1 = questions.find((q: any) => q.order === 75);
+    const sidasQ2 = questions.find((q: any) => q.order === 76);
+    const sidasQ3 = questions.find((q: any) => q.order === 77);
+    const sidasQ4 = questions.find((q: any) => q.order === 78);
+    const sidasQ5 = questions.find((q: any) => q.order === 79);
+
+    if (sidasQ1) {
+      const val1 = getNumericValueForResponse(sidasQ1, responses[sidasQ1.id]);
+      if (val1 === 0) {
+        return false;
+      }
+      if (val1 !== undefined) {
+        const val2 = sidasQ2 ? getNumericValueForResponse(sidasQ2, responses[sidasQ2.id]) : undefined;
+        const val3 = sidasQ3 ? getNumericValueForResponse(sidasQ3, responses[sidasQ3.id]) : undefined;
+        const val4 = sidasQ4 ? getNumericValueForResponse(sidasQ4, responses[sidasQ4.id]) : undefined;
+        const val5 = sidasQ5 ? getNumericValueForResponse(sidasQ5, responses[sidasQ5.id]) : undefined;
+
+        if (
+          val2 !== undefined &&
+          val3 !== undefined &&
+          val4 !== undefined &&
+          val5 !== undefined
+        ) {
+          const total = val1 + (10 - val2) + val3 + val4 + val5;
+          if (total >= 21) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  };
+
   const handleNext = () => {
+    if (checkSuicideRiskLocal() && !hasShownSafetyPanel) {
+      setHasShownSafetyPanel(true);
+      setSafetyPanelPendingAction('next');
+      setShowSafetyPanel(true);
+      return;
+    }
+    proceedNext();
+  };
+
+  const proceedNext = () => {
     if (currentIndex < scaleGroups.length - 1) {
       setCurrentIndex(prev => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -207,6 +294,67 @@ const QuestionnairePage: React.FC = () => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const completeSubmissionWorkflow = () => {
+    if (questionnaire?.assessment_type === 'SOCIODEMOGRAPHIC') {
+      localStorage.setItem('has_completed_sociodemographic', 'true');
+      questionnairesApi.list().then(qRes => {
+        const qList = Array.isArray(qRes.data) ? qRes.data : qRes.data?.results || [];
+        const battery = qList.find((q: any) => q.is_active && q.assessment_type === 'PSYCHOMETRIC');
+        if (battery) {
+          setCompleted(true);
+          setTimeout(() => {
+            setCompleted(false);
+            navigate(`/questionnaire/${battery.id}?milestone=SIGNUP`, { replace: true });
+            window.location.reload();
+          }, 3000);
+        }
+      }).catch(e => {
+        console.error("Failed to find psychometric battery questionnaire", e);
+      });
+      return;
+    }
+
+    const queryParams = new URLSearchParams(window.location.search);
+    const completedMilestone = queryParams.get('milestone');
+    if (completedMilestone === 'SIGNUP' && questionnaire?.assessment_type === 'PSYCHOMETRIC') {
+      localStorage.removeItem('due_milestone');
+    }
+
+    setCompleted(true);
+
+    setTimeout(() => {
+      navigate('/dashboard', {
+        state: { message: 'Assessment finalized.' },
+        replace: true
+      });
+    }, 3000);
+  };
+
+  const handleSafetyPanelConfirm = async (optIn: boolean) => {
+    if (!responseSetId) return;
+    setSubmittingOptIn(true);
+    try {
+      await questionnairesApi.submitOptIn(responseSetId, optIn);
+      setShowSafetyPanel(false);
+      if (safetyPanelPendingAction === 'next') {
+        proceedNext();
+      } else {
+        completeSubmissionWorkflow();
+      }
+    } catch (err) {
+      console.error('Failed to save opt-in choice:', err);
+      setShowSafetyPanel(false);
+      if (safetyPanelPendingAction === 'next') {
+        proceedNext();
+      } else {
+        completeSubmissionWorkflow();
+      }
+    } finally {
+      setSubmittingOptIn(false);
+      setSafetyPanelPendingAction(null);
     }
   };
 
@@ -233,43 +381,17 @@ const QuestionnairePage: React.FC = () => {
         return base;
       });
 
-      await questionnairesApi.submitResponseSet(responseSetId, payload);
-
-      if (questionnaire?.assessment_type === 'SOCIODEMOGRAPHIC') {
-        localStorage.setItem('has_completed_sociodemographic', 'true');
-        try {
-          const qRes = await questionnairesApi.list();
-          const qList = Array.isArray(qRes.data) ? qRes.data : qRes.data?.results || [];
-          const battery = qList.find((q: any) => q.is_active && q.assessment_type === 'PSYCHOMETRIC');
-          if (battery) {
-            setCompleted(true);
-            setTimeout(() => {
-              setCompleted(false);
-              navigate(`/questionnaire/${battery.id}?milestone=SIGNUP`, { replace: true });
-              window.location.reload();
-            }, 3000);
-            return;
-          }
-        } catch (e) {
-          console.error("Failed to find psychometric battery questionnaire", e);
-        }
+      const res = await questionnairesApi.submitResponseSet(responseSetId, payload);
+      
+      const isSuicideTriggered = res.data?.suicide_risk_triggered;
+      if (isSuicideTriggered && !hasShownSafetyPanel) {
+        setHasShownSafetyPanel(true);
+        setSafetyPanelPendingAction('submit');
+        setShowSafetyPanel(true);
+        return;
       }
 
-      // If the SIGNUP milestone psychometrics were just completed, clear due_milestone
-      const queryParams = new URLSearchParams(window.location.search);
-      const completedMilestone = queryParams.get('milestone');
-      if (completedMilestone === 'SIGNUP' && questionnaire?.assessment_type === 'PSYCHOMETRIC') {
-        localStorage.removeItem('due_milestone');
-      }
-
-      setCompleted(true);
-
-      setTimeout(() => {
-        navigate('/dashboard', {
-          state: { message: 'Assessment finalized.' },
-          replace: true
-        });
-      }, 3000);
+      completeSubmissionWorkflow();
     } catch (err: any) {
       setError('Failed to submit questionnaire. Please try again.');
     } finally {
@@ -470,7 +592,7 @@ const QuestionnairePage: React.FC = () => {
                     {question.type === 'SCALE' && (
                       <LikertSlider
                         options={question.options}
-                        value={responses[question.id]}
+                        value={getNumericValueForResponse(question, responses[question.id])}
                         onChange={(val) => handleResponseChange(question.id, val)}
                       />
                     )}
@@ -516,6 +638,12 @@ const QuestionnairePage: React.FC = () => {
           </div>
         </motion.div>
       </AnimatePresence>
+
+      <SafetyPanelModal
+        isOpen={showSafetyPanel}
+        onConfirm={handleSafetyPanelConfirm}
+        submitting={submittingOptIn}
+      />
     </div>
   );
 };
