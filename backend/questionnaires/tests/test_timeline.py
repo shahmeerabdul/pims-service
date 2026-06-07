@@ -173,6 +173,11 @@ class TestTimelineScheduler:
             cache_key = f"user_{onboarded_user.id}_due_milestone"
             assert cache.get(cache_key) == '7_DAYS'
 
+            # Populate other cache keys
+            cache.set(f"user_{onboarded_user.id}_activity_state", "some_state")
+            cache.set(f"user_{onboarded_user.id}_exp_day", 7)
+            cache.set(f"user_{onboarded_user.id}_completion_rate", 85)
+
             # Submit via ResponseSetSubmitSerializer
             rs = ResponseSet.objects.create(
                 user=onboarded_user,
@@ -195,6 +200,9 @@ class TestTimelineScheduler:
 
             # Verify cache cleared
             assert cache.get(cache_key) is None
+            assert cache.get(f"user_{onboarded_user.id}_activity_state") is None
+            assert cache.get(f"user_{onboarded_user.id}_exp_day") is None
+            assert cache.get(f"user_{onboarded_user.id}_completion_rate") is None
 
     def test_due_milestone_api_view(self, api_client, onboarded_user):
         api_client.force_authenticate(user=onboarded_user)

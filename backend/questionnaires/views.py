@@ -24,12 +24,12 @@ from .serializers import (
 )
 
 class QuestionnaireListView(generics.ListAPIView):
-    queryset = Questionnaire.objects.filter(is_active=True)
+    queryset = Questionnaire.objects.filter(is_active=True).prefetch_related('questions__options')
     serializer_class = QuestionnaireSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
 class QuestionnaireDetailView(generics.RetrieveAPIView):
-    queryset = Questionnaire.objects.all()
+    queryset = Questionnaire.objects.all().prefetch_related('questions__options')
     serializer_class = QuestionnaireSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -39,7 +39,7 @@ class ResponseSetListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         # Users see their own response sets, ordered by most recent completion
-        return ResponseSet.objects.filter(user=self.request.user).select_related('questionnaire').order_by('-completed_at')
+        return ResponseSet.objects.filter(user=self.request.user).select_related('questionnaire').prefetch_related('responses__selected_option').order_by('-completed_at')
 
     def create(self, request, *args, **kwargs):
         from rest_framework.exceptions import ValidationError

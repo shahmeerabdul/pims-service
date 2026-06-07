@@ -33,15 +33,21 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-dev-key-only')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG', default=True)
+DEBUG = env('DEBUG', default=False)
+
+if not DEBUG:
+    # Ensure a secret key is present and is not the insecure development fallback
+    if not SECRET_KEY or SECRET_KEY == 'django-insecure-dev-key-only' or 'insecure' in SECRET_KEY:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("SECRET_KEY must be configured to a secure, unique value when DEBUG=False.")
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', 'backend', 'testserver'])
 
 # Production Security Settings
 if not DEBUG:
     SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000) # 1 year
@@ -247,6 +253,7 @@ SIMPLE_JWT = {
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['http://localhost:5173', 'http://127.0.0.1:5173'])
 
 # Celery Settings
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://127.0.0.1:6379/0')
