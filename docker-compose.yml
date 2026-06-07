@@ -1,7 +1,15 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
-    image: postgres:15-alpine
+    image: public.ecr.aws/docker/library/postgres:15-alpine
     container_name: psych_db
+    restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-psych_db}
       POSTGRES_USER: ${POSTGRES_USER:-psych_user}
@@ -17,8 +25,10 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: public.ecr.aws/docker/library/redis:7-alpine
     container_name: psych_redis
+    restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -30,19 +40,22 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: psych_backend
+    restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-dev-key-123456789}
-      DEBUG: ${DEBUG:-True}
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-dev-key-123456789}
+      DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       DATABASE_URL: ${DATABASE_URL:-postgres://psych_user:psych_pass@db:5432/psych_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@pims.local}
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-admin}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       TZ: Asia/Karachi
     depends_on:
       db:
@@ -56,15 +69,18 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: psych_celery_worker
+    restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./backend:/app
       - media_volume:/app/media
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-dev-key-123456789}
-      DEBUG: ${DEBUG:-True}
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-dev-key-123456789}
+      DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       DATABASE_URL: ${DATABASE_URL:-postgres://psych_user:psych_pass@db:5432/psych_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       TZ: Asia/Karachi
     depends_on:
       db:
@@ -78,14 +94,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: psych_celery_beat
+    restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./backend:/app
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-dev-key-123456789}
-      DEBUG: ${DEBUG:-True}
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-dev-key-123456789}
+      DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       DATABASE_URL: ${DATABASE_URL:-postgres://psych_user:psych_pass@db:5432/psych_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       TZ: Asia/Karachi
     depends_on:
       db:
@@ -98,10 +117,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
     container_name: psych_frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    restart: unless-stopped
+    logging: *default-logging
     environment:
       VITE_API_URL: ${VITE_API_URL}
     depends_on:
@@ -112,8 +132,10 @@ services:
       context: ./nginx
       dockerfile: Dockerfile
     container_name: psych_nginx
+    restart: unless-stopped
+    logging: *default-logging
     ports:
-      - "80:80"
+      - "${NGINX_PORT:-80}:80"
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media

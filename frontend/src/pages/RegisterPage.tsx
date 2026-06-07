@@ -24,6 +24,7 @@ const RegisterPage: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [phase] = useState<'details' | 'otp'>('details');
   const [otpMessage] = useState('');
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const { t } = useTranslation();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,12 +250,19 @@ const RegisterPage: React.FC = () => {
               name="consent_agreed"
               type="checkbox"
               required
-              className="mt-1 w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+              className="mt-1 w-4 h-4 rounded border-2 border-black text-black focus:ring-black cursor-pointer"
               checked={formData.consent_agreed}
               onChange={handleChange}
             />
-            <label htmlFor="consent_agreed" className="text-sm text-zinc-600 leading-tight">
-              {t('register.consent_text')}
+            <label htmlFor="consent_agreed" className="text-xs text-zinc-700 leading-tight font-medium select-none">
+              {t('register.consent_checkbox_label')}{' '}
+              <button
+                type="button"
+                onClick={() => setShowConsentModal(true)}
+                className="text-black font-bold underline hover:text-zinc-800 cursor-pointer"
+              >
+                {t('register.consent_link')}
+              </button>
             </label>
           </div>
 
@@ -278,8 +286,12 @@ const RegisterPage: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading}
-            className="btn-minimal w-full flex items-center justify-center gap-2 group py-2.5 bg-black"
+            disabled={loading || !formData.consent_agreed}
+            className={`btn-minimal w-full flex items-center justify-center gap-2 group py-2.5 transition-all duration-200 ${
+              (!formData.consent_agreed || loading)
+                ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed border-zinc-300'
+                : 'bg-black text-white hover:bg-zinc-800 border-black'
+            }`}
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
@@ -299,6 +311,65 @@ const RegisterPage: React.FC = () => {
         </p>
       </div>
       </div>
+
+      {/* Consent Modal */}
+      {showConsentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 transition-opacity duration-200">
+          <div className="bg-white border-2 border-black max-w-lg w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto rounded-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative flex flex-col">
+            <div className="flex justify-between items-center border-b-2 border-black pb-2">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-black">{t('register.consent_header')}</h2>
+              <button 
+                type="button" 
+                onClick={() => setShowConsentModal(false)} 
+                className="text-black font-bold text-xs uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-zinc-100"
+              >
+                Close
+              </button>
+            </div>
+            
+            <div className="text-xs text-zinc-700 space-y-4 leading-relaxed font-sans overflow-y-auto pr-1">
+              <div>
+                <h4 className="font-bold text-black text-sm mb-1">{t('register.consent_section1_title')}</h4>
+                <p>{t('register.consent_section1_text')}</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-black text-sm mb-1">{t('register.consent_section2_title')}</h4>
+                <p>{t('register.consent_section2_text')}</p>
+              </div>
+              <div>
+                <h4 className="font-bold text-black text-sm mb-1">{t('register.consent_section3_title')}</h4>
+                <p className="text-black font-semibold bg-yellow-50 p-2 border border-dashed border-yellow-300 rounded-none leading-relaxed">
+                  {t('register.consent_section3_text')}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-bold text-black text-sm mb-1">{t('register.consent_section4_title')}</h4>
+                <p>{t('register.consent_section4_text')}</p>
+              </div>
+            </div>
+            
+            <div className="pt-3 border-t-2 border-black flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConsentModal(false)}
+                className="border border-black px-3 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-zinc-100"
+              >
+                Read Later
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({ ...prev, consent_agreed: true }));
+                  setShowConsentModal(false);
+                }}
+                className="bg-black text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-zinc-800"
+              >
+                Agree & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

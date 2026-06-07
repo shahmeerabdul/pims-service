@@ -311,8 +311,8 @@ const QuestionnairePage: React.FC = () => {
                 setCompleted(true);
                 setTimeout(() => {
                   setCompleted(false);
-                  window.location.href = '/dashboard';
-                }, 3000);
+                  navigate('/dashboard', { replace: true });
+                }, 1000);
                 return;
               }
             }
@@ -326,8 +326,8 @@ const QuestionnairePage: React.FC = () => {
                 setCompleted(true);
                 setTimeout(() => {
                   setCompleted(false);
-                  window.location.href = `/questionnaire/${battery.id}?milestone=SIGNUP`;
-                }, 3000);
+                  navigate(`/questionnaire/${battery.id}?milestone=SIGNUP`, { replace: true });
+                }, 1000);
               }
             }).catch(e => {
               console.error("Failed to find psychometric battery questionnaire", e);
@@ -343,7 +343,7 @@ const QuestionnairePage: React.FC = () => {
               console.error("Failed to fetch user profile after all retries", err);
               // Fallback
               localStorage.setItem('has_completed_sociodemographic', 'true');
-              window.location.href = '/dashboard';
+              navigate('/dashboard', { replace: true });
             }
           });
       };
@@ -365,7 +365,7 @@ const QuestionnairePage: React.FC = () => {
         state: { message: 'Assessment finalized.' },
         replace: true
       });
-    }, 3000);
+    }, 1000);
   };
 
   const handleSafetyPanelConfirm = async (optIn: boolean) => {

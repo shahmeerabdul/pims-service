@@ -1,25 +1,31 @@
-# Base image
-FROM node:20-alpine
+# Stage 1: Build the React application
+FROM public.ecr.aws/docker/library/node:20-alpine AS builder
 
-# Set work directory
 WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy project files
+# Copy source files
 COPY . .
 
-# Healthcheck to verify the dev server is running
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget --quiet --tries=1 --spider http://localhost:5173 || exit 1
+# Pass the VITE_API_URL build argument
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
-# Build for production if necessary
-# RUN npm run build
+# Build the application
+RUN npm run build
 
-# Expose port for Vite
+# Stage 2: Serve the compiled static files using Nginx
+FROM public.ecr.aws/docker/library/nginx:1.25-alpine
+
+# Copy custom nginx configuration for frontend
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy build output from Stage 1
+COPY --from=builder /app/dist /usr/share/nginx/html
+
 EXPOSE 5173
 
-# Default command for development (hot reloading)
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["nginx", "-g", "daemon off;"]

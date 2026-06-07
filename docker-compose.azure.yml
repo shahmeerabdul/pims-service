@@ -16,7 +16,7 @@ services:
   backend:
     image: ${ACR_NAME}.azurecr.io/backend:latest
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
       ALLOWED_HOSTS: "*"
       DATABASE_URL: postgres://psych_user:${POSTGRES_PASSWORD}@db:5432/psych_db
@@ -29,7 +29,7 @@ services:
     image: ${ACR_NAME}.azurecr.io/backend:latest
     command: celery -A core worker --loglevel=info
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY}
       DATABASE_URL: postgres://psych_user:${POSTGRES_PASSWORD}@db:5432/psych_db
       REDIS_URL: redis://redis:6379/0
     depends_on:

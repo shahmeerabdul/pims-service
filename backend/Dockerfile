@@ -1,5 +1,5 @@
 # Base image
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -26,7 +26,7 @@ COPY . /app/
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Environment variables for collectstatic
-ENV DJANGO_SECRET_KEY=collectstatic-dummy-key
+ENV SECRET_KEY=collectstatic-dummy-key
 ENV DEBUG=False
 
 # Collect static files

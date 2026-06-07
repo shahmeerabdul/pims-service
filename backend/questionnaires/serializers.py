@@ -260,15 +260,28 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
         responses_data = validated_data.pop('responses_data')
         
         with transaction.atomic():
+            # Lock the parent response set row to prevent concurrent conflicts
+            ResponseSet.objects.select_for_update().get(id=instance.id)
+
             # 1. Clear any existing draft responses (if any)
             instance.responses.all().delete()
             
             # 2. Bulk create new responses
+            responses_to_create = []
             for item in responses_data:
-                Response.objects.create(
+                q = item.get('question')
+                opt = item.get('selected_option')
+                responses_to_create.append(Response(
                     response_set=instance,
-                    **item
-                )
+                    question=q,
+                    selected_option=opt,
+                    text_value=item.get('text_value'),
+                    question_text=q.content if q else None,
+                    question_order=q.order if q else None,
+                    selected_option_value=opt.numeric_value if opt else None,
+                    selected_option_label=opt.label if opt else None
+                ))
+            Response.objects.bulk_create(responses_to_create)
             
             # 3. Mark as COMPLETED
             instance.status = 'COMPLETED'
@@ -310,9 +323,12 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
                 user.posttest_completed_at = timezone.now()
                 user.save(update_fields=['has_completed_posttest', 'posttest_completed_at'])
 
-            # Invalidate cached due milestone on submission
+            # Invalidate cached due milestone and activity state on submission
             from django.core.cache import cache
             cache.delete(f"user_{user.id}_due_milestone")
+            cache.delete(f"user_{user.id}_activity_state")
+            cache.delete(f"user_{user.id}_exp_day")
+            cache.delete(f"user_{user.id}_completion_rate")
 
             # Calculate and save scores
             calculate_and_save_scores(instance)
@@ -368,14 +384,28 @@ class ResponseSetDraftSerializer(serializers.ModelSerializer):
         responses_data = validated_data.pop('responses_data', [])
         
         with transaction.atomic():
+            # Lock the parent response set row to prevent concurrent conflicts
+            ResponseSet.objects.select_for_update().get(id=instance.id)
+
             # Clear existing draft responses and replace them
             instance.responses.all().delete()
             
+            # Bulk create responses to minimize database hits
+            responses_to_create = []
             for item in responses_data:
-                Response.objects.create(
+                q = item.get('question')
+                opt = item.get('selected_option')
+                responses_to_create.append(Response(
                     response_set=instance,
-                    **item
-                )
+                    question=q,
+                    selected_option=opt,
+                    text_value=item.get('text_value'),
+                    question_text=q.content if q else None,
+                    question_order=q.order if q else None,
+                    selected_option_value=opt.numeric_value if opt else None,
+                    selected_option_label=opt.label if opt else None
+                ))
+            Response.objects.bulk_create(responses_to_create)
             
             # Note: We do NOT mark status = 'COMPLETED' or set completed_at
             instance.save()

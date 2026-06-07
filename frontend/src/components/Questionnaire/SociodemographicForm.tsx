@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { questionnairesApi } from '../../services/api';
 import { CheckCircle2, Loader2, Save } from 'lucide-react';
@@ -27,6 +27,15 @@ const SociodemographicForm: React.FC<SociodemographicFormProps> = ({
   const [responses, setResponses] = useState<Record<string, any>>(initialResponses);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Scroll to first unanswered question on mount (Resume from last completed item)
@@ -50,25 +59,30 @@ const SociodemographicForm: React.FC<SociodemographicFormProps> = ({
     };
   };
 
-  const handleResponseChange = async (questionId: string, optionId: string) => {
+  const handleResponseChange = (questionId: string, optionId: string) => {
     const newResponses = { ...responses, [questionId]: optionId };
     setResponses(newResponses);
     
-    // Trigger Auto-Save
-    setIsSaving(true);
-    try {
-      const payload = Object.entries(newResponses).map(([qId, optId]) => ({
-        question_id: qId,
-        selected_option_id: optId
-      }));
-      
-      await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error("Failed to auto-save", error);
-    } finally {
-      setIsSaving(false);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    setIsSaving(true);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const payload = Object.entries(newResponses).map(([qId, optId]) => ({
+          question_id: qId,
+          selected_option_id: optId
+        }));
+        
+        await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error("Failed to auto-save", error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 500);
   };
 
   const isAllCompleted = questions.every(q => responses[q.id]);
