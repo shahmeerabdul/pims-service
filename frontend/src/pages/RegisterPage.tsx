@@ -373,12 +373,11 @@ const RegisterPage: React.FC = () => {
                 </div>
                 {otpMessage && <p className="text-xs text-emerald-600 font-medium italic mt-1">{otpMessage}</p>}
               </div>
-
-              <div className="flex justify-between items-center gap-4">
+              <div className="flex justify-between items-center gap-4 mt-4">
                 <button
                   type="button"
                   onClick={() => setPhase('details')}
-                  className="flex-1 border-2 border-black py-2.5 px-4 uppercase font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-zinc-50 cursor-pointer"
+                  className="flex-1 border-2 border-black py-2.5 px-4 uppercase font-bold text-xs flex items-center justify-center gap-2 hover:bg-zinc-50 cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Edit Details
@@ -387,7 +386,7 @@ const RegisterPage: React.FC = () => {
                   type="button"
                   onClick={() => handleSendOTP(true)}
                   disabled={resending}
-                  className="flex-1 border-2 border-black py-2.5 px-4 uppercase font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-zinc-50 disabled:opacity-50 cursor-pointer"
+                  className="flex-1 border-2 border-black py-2.5 px-4 uppercase font-bold text-xs flex items-center justify-center gap-2 hover:bg-zinc-50 disabled:opacity-50 cursor-pointer"
                 >
                   {resending ? (
                     <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
@@ -399,7 +398,6 @@ const RegisterPage: React.FC = () => {
               </div>
             </div>
           )}
-
           <button
             type="submit"
             disabled={loading || (phase === 'details' && !formData.consent_agreed)}

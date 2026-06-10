@@ -60,6 +60,11 @@ def posttest_questionnaire(db):
 @pytest.mark.django_db
 class TestT0ResultsAPI:
     def test_admin_can_list_t0_results(self, api_client, admin_user, posttest_questionnaire, day7_user):
+        from groups.models import Group
+        group = Group.objects.create(name='Control Group')
+        day7_user.group = group
+        day7_user.save()
+
         # Create a completed T0 baseline response set
         rs = ResponseSet.objects.create(
             user=day7_user,
@@ -77,6 +82,7 @@ class TestT0ResultsAPI:
         # The response is paginated
         assert response.data['count'] == 1
         assert response.data['results'][0]['id'] == str(rs.id)
+        assert response.data['results'][0]['group_name'] == 'Control Group'
 
     def test_participant_cannot_list_t0_results(self, api_client, day7_user):
         api_client.force_authenticate(user=day7_user)

@@ -201,7 +201,10 @@ class AdminT0ResponseListView(generics.ListAPIView):
             milestone='SIGNUP',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').prefetch_related(
+            'responses__question',
+            'responses__selected_option'
+        ).order_by('-completed_at')
 
 class AdminT0ResponseDetailView(generics.RetrieveAPIView):
     """
@@ -215,7 +218,7 @@ class AdminT0ResponseDetailView(generics.RetrieveAPIView):
             milestone='SIGNUP',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
+        ).select_related('user__group', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
         )
@@ -234,7 +237,10 @@ class AdminT1ResponseListView(generics.ListAPIView):
             milestone='7_DAYS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').prefetch_related(
+            'responses__question',
+            'responses__selected_option'
+        ).order_by('-completed_at')
 
 
 class AdminT1ResponseDetailView(generics.RetrieveAPIView):
@@ -249,7 +255,7 @@ class AdminT1ResponseDetailView(generics.RetrieveAPIView):
             milestone='7_DAYS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
+        ).select_related('user__group', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
         )
@@ -302,7 +308,10 @@ class AdminT2ResponseListView(generics.ListAPIView):
             milestone='3_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').prefetch_related(
+            'responses__question',
+            'responses__selected_option'
+        ).order_by('-completed_at')
 
 
 class AdminT2ResponseDetailView(generics.RetrieveAPIView):
@@ -317,7 +326,7 @@ class AdminT2ResponseDetailView(generics.RetrieveAPIView):
             milestone='3_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
+        ).select_related('user__group', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
         )
@@ -336,7 +345,10 @@ class AdminT3ResponseListView(generics.ListAPIView):
             milestone='6_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').prefetch_related(
+            'responses__question',
+            'responses__selected_option'
+        ).order_by('-completed_at')
 
 
 class AdminT3ResponseDetailView(generics.RetrieveAPIView):
@@ -351,7 +363,7 @@ class AdminT3ResponseDetailView(generics.RetrieveAPIView):
             milestone='6_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
+        ).select_related('user__group', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
         )
@@ -370,7 +382,10 @@ class AdminT4ResponseListView(generics.ListAPIView):
             milestone='1_YEAR',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').prefetch_related(
+            'responses__question',
+            'responses__selected_option'
+        ).order_by('-completed_at')
 
 
 class AdminT4ResponseDetailView(generics.RetrieveAPIView):
@@ -385,7 +400,7 @@ class AdminT4ResponseDetailView(generics.RetrieveAPIView):
             milestone='1_YEAR',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').prefetch_related(
+        ).select_related('user__group', 'questionnaire').prefetch_related(
             'responses__question',
             'responses__selected_option'
         )
