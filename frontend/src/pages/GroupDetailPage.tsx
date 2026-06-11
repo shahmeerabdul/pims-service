@@ -10,7 +10,9 @@ import {
   Save,
   X,
   ArrowLeft,
-  Trash2
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { getGroupDetail, updateGroup, usersApi } from '../services/api';
 import DeleteUserModal from '../components/Admin/DeleteUserModal';
@@ -48,6 +50,21 @@ const GroupDetailPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil((group?.participants?.length || 0) / itemsPerPage);
+  const paginatedParticipants = (group?.participants || []).slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [group?.participants, totalPages, currentPage]);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -219,7 +236,7 @@ const GroupDetailPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {group.participants.map((p) => (
+                {paginatedParticipants.map((p) => (
                   <tr key={p.user_id} className="hover:bg-zinc-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -288,6 +305,45 @@ const GroupDetailPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/30 flex items-center justify-between flex-wrap gap-4">
+              <div className="text-xs text-zinc-500 font-medium">
+                Showing <span className="font-semibold text-zinc-800">{((currentPage - 1) * itemsPerPage) + 1}</span> to{' '}
+                <span className="font-semibold text-zinc-800">
+                  {Math.min(currentPage * itemsPerPage, group.participants.length)}
+                </span>{' '}
+                of <span className="font-semibold text-zinc-800">{group.participants.length}</span> participants
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:hover:bg-white transition-all"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${currentPage === page
+                        ? 'bg-zinc-800 border-zinc-800 text-white'
+                        : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:hover:bg-white transition-all"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
