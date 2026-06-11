@@ -323,3 +323,27 @@ class TestMissedDayProtocol:
         result = run_assessment_graduated_reminders()
         assert "Graduated reminders sent: 0" in result
         assert Notification.objects.filter(user=user).count() == 0
+
+    @patch('notifications.tasks.send_notification.delay')
+    def test_tier4_assessment_overdue_downtime_robustness(self, mock_delay, test_group):
+        from datetime import timedelta
+        from notifications.tasks import run_assessment_graduated_reminders
+        from support.models import SupportTicket
+
+        # Setup user with onboarding completed 18 days ago (7_DAYS milestone overdue by 11 days)
+        # simulating that the daily checker was down on day 10.
+        user = User.objects.create_user(
+            username="t4_downtime", email="t4_dt@test.com", password="pwd",
+            group=test_group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now() - timedelta(days=18)
+        )
+
+        result = run_assessment_graduated_reminders()
+        assert "Support call tickets created: 1" in result
+
+        # Verify call ticket was created
+        ticket = SupportTicket.objects.filter(user=user).first()
+        assert ticket is not None
+        assert "Call Protocol: Assessment Overdue" in ticket.subject
+        assert "Tier 4" in ticket.subject
+        assert ticket.status == 'Open'

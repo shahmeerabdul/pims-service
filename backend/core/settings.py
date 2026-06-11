@@ -287,6 +287,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'notifications.tasks.run_tier3_daily_evaluation',
         'schedule': crontab(hour=1, minute=0),
     },
+    'assessment-milestone-due-reminders': {
+        'task': 'notifications.tasks.send_longitudinal_milestone_reminders',
+        'schedule': crontab(hour=9, minute=30),
+    },
     'assessment-graduated-reminders': {
         'task': 'notifications.tasks.run_assessment_graduated_reminders',
         'schedule': crontab(hour=2, minute=0),

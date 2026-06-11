@@ -18,24 +18,51 @@ def send_notification(self, notification_id):
             notification.user_id,
         )
         
-        # Send actual email if n_type is 'email' and it contains 'reflection'
-        if notification.n_type == 'email' and 'reflection' in notification.message.lower():
+        # Send actual email if n_type is 'email'
+        if notification.n_type == 'email':
             from django.core.mail import EmailMultiAlternatives
             from django.conf import settings
             
             user = notification.user
+            if not user.is_active:
+                logger.error("User %s is inactive, skipping email send.", user.username)
+                notification.status = 'failed'
+                notification.save(update_fields=['status'])
+                return {'status': 'failed', 'reason': 'inactive_user', 'notification_id': notification_id}
+                
+            if not user.email:
+                logger.error("User %s does not have an email address configured, skipping email send.", user.username)
+                notification.status = 'failed'
+                notification.save(update_fields=['status'])
+                return {'status': 'failed', 'reason': 'missing_email', 'notification_id': notification_id}
+                
             name = user.display_name
             
-            subject = "PIMS Daily Activity Reminder"
-            text_content = f"Hi {name},\n\n{notification.message}\n\nPlease complete your reflection today: https://psycheversity.com/dashboard"
+            msg_lower = notification.message.lower()
+            if 'reflection' in msg_lower:
+                subject = "PIMS Daily Activity Reminder"
+                button_text = "Complete Today's Reflection"
+                title = "Daily Reflection Reminder"
+                dashboard_url = "https://psycheversity.com/dashboard"
+            else:
+                if 'overdue' in msg_lower:
+                    subject = "PIMS Assessment Overdue Reminder"
+                    title = "Assessment Overdue Reminder"
+                else:
+                    subject = "PIMS Assessment Due Reminder"
+                    title = "Assessment Due Reminder"
+                button_text = "Go to Dashboard"
+                dashboard_url = "https://psycheversity.com/dashboard"
+                
+            text_content = f"Hi {name},\n\n{notification.message}\n\nPlease visit your dashboard: {dashboard_url}"
             
             html_content = f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
-                <h2 style="color: #18181b; margin-top: 0;">Daily Reflection Reminder</h2>
+                <h2 style="color: #18181b; margin-top: 0;">{title}</h2>
                 <p style="font-size: 16px; color: #18181b;">Hi {name},</p>
                 <p style="color: #3f3f46; font-size: 16px; line-height: 1.5;">{notification.message}</p>
                 <div style="margin: 25px 0;">
-                    <a href="https://psycheversity.com/dashboard" style="background-color: #18181b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Complete Today's Reflection</a>
+                    <a href="{dashboard_url}" style="background-color: #18181b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">{button_text}</a>
                 </div>
                 <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
                 <p style="color: #71717a; font-size: 12px; margin-bottom: 0;">This is an automated message from the Psychological Intervention Platform. Please do not reply directly to this email.</p>
@@ -50,7 +77,7 @@ def send_notification(self, notification_id):
             )
             msg.attach_alternative(html_content, "text/html")
             msg.send(fail_silently=False)
-            logger.info("Successfully sent daily reflection email to %s", user.email)
+            logger.info("Successfully sent email notification to %s", user.email)
             
         notification.status = 'sent'
         notification.save(update_fields=['status'])
@@ -317,7 +344,7 @@ def run_assessment_graduated_reminders():
         elif overdue_days == 7:
             n_type = 'sms'
             message = f"PIMS Alert: Your {label} assessment is now 7 days overdue. Please complete it soon to continue in the study."
-        elif overdue_days == 10:
+        elif overdue_days >= 10:
             # Create a Call ticket
             exists = SupportTicket.objects.filter(
                 user=user,

@@ -77,19 +77,102 @@ def test_send_daily_reflection_email_personalization(test_user):
     assert "complete your daily reflection today." in sent_email.body
     assert "Complete Today's Reflection" in sent_email.alternatives[0][0]
 
-    # 2. Notification without "reflection" in message (milestone, should not send email for now)
+    # 2. Notification without "reflection" in message (milestone/assessment due, should send due email)
     mail.outbox = []
-    notif_other = Notification.objects.create(
+    notif_due = Notification.objects.create(
         user=test_user,
         n_type='email',
-        message='Your 7-day posttest assessment is now due.',
+        message='Your 7-day post-test assessment is now due.',
         scheduled_time=timezone.now(),
         status='pending'
     )
 
-    res2 = send_notification(notif_other.pk)
-    notif_other.refresh_from_db()
-    assert notif_other.status == 'sent'
+    res2 = send_notification(notif_due.pk)
+    notif_due.refresh_from_db()
+    assert notif_due.status == 'sent'
     
-    # Assert NO email was sent
+    # Assert email was sent
+    assert len(mail.outbox) == 1
+    sent_email = mail.outbox[0]
+    assert sent_email.subject == "PIMS Assessment Due Reminder"
+    assert sent_email.to == [test_user.email]
+    assert "Sarah Kim" in sent_email.body
+    assert "Your 7-day post-test assessment is now due." in sent_email.body
+    assert "Assessment Due Reminder" in sent_email.alternatives[0][0]
+    assert "Go to Dashboard" in sent_email.alternatives[0][0]
+
+    # 3. Notification without "reflection" in message (milestone/assessment overdue, should send overdue email)
+    mail.outbox = []
+    notif_overdue = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Reminder: Your 3-month follow-up assessment is overdue.',
+        scheduled_time=timezone.now(),
+        status='pending'
+    )
+
+    res3 = send_notification(notif_overdue.pk)
+    notif_overdue.refresh_from_db()
+    assert notif_overdue.status == 'sent'
+    
+    # Assert email was sent
+    assert len(mail.outbox) == 1
+    sent_email_od = mail.outbox[0]
+    assert sent_email_od.subject == "PIMS Assessment Overdue Reminder"
+    assert sent_email_od.to == [test_user.email]
+    assert "Sarah Kim" in sent_email_od.body
+    assert "Reminder: Your 3-month follow-up assessment is overdue." in sent_email_od.body
+    assert "Assessment Overdue Reminder" in sent_email_od.alternatives[0][0]
+    assert "Go to Dashboard" in sent_email_od.alternatives[0][0]
+
+
+@pytest.mark.django_db
+def test_send_notification_inactive_user(test_user):
+    from notifications.models import Notification
+    from notifications.tasks import send_notification
+    from django.core import mail
+
+    test_user.is_active = False
+    test_user.save()
+    mail.outbox = []
+
+    notif = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Hello',
+        scheduled_time=timezone.now(),
+        status='pending',
+    )
+
+    result = send_notification(notif.pk)
+    notif.refresh_from_db()
+    assert notif.status == 'failed'
+    assert result['status'] == 'failed'
+    assert result['reason'] == 'inactive_user'
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_send_notification_missing_email(test_user):
+    from notifications.models import Notification
+    from notifications.tasks import send_notification
+    from django.core import mail
+
+    test_user.email = ""
+    test_user.save()
+    mail.outbox = []
+
+    notif = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Hello',
+        scheduled_time=timezone.now(),
+        status='pending',
+    )
+
+    result = send_notification(notif.pk)
+    notif.refresh_from_db()
+    assert notif.status == 'failed'
+    assert result['status'] == 'failed'
+    assert result['reason'] == 'missing_email'
     assert len(mail.outbox) == 0
