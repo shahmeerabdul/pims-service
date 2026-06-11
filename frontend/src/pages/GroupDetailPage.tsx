@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Users, 
-  RotateCw, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  Edit3, 
-  Save, 
+import {
+  Users,
+  RotateCw,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Edit3,
+  Save,
   X,
   ArrowLeft,
-  Trash2
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { getGroupDetail, updateGroup, usersApi } from '../services/api';
 import DeleteUserModal from '../components/Admin/DeleteUserModal';
@@ -19,6 +21,7 @@ interface Participant {
   user_id: number;
   full_name: string;
   username: string;
+  email: string;
   submission_count: number;
   has_completed_sociodemographic: boolean;
   current_experiment_day: number | null;
@@ -37,16 +40,31 @@ interface Group {
 const GroupDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', description: '' });
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil((group?.participants?.length || 0) / itemsPerPage);
+  const paginatedParticipants = (group?.participants || []).slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [group?.participants, totalPages, currentPage]);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -54,9 +72,9 @@ const GroupDetailPage: React.FC = () => {
     try {
       const response = await getGroupDetail(parseInt(id));
       setGroup(response.data);
-      setEditForm({ 
-        name: response.data.name, 
-        description: response.data.description || '' 
+      setEditForm({
+        name: response.data.name,
+        description: response.data.description || ''
       });
       setError(null);
     } catch (err) {
@@ -125,7 +143,7 @@ const GroupDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pt-0">
-      <button 
+      <button
         onClick={() => navigate('/admin/groups')}
         className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 transition-colors text-sm font-medium"
       >
@@ -137,17 +155,17 @@ const GroupDetailPage: React.FC = () => {
           <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium mb-1">
             <Users size={14} /> Group Command Center
           </div>
-          
+
           {isEditing ? (
             <div className="space-y-4">
-              <input 
+              <input
                 value={editForm.name}
-                onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 className="text-3xl font-bold bg-transparent border-b-2 border-zinc-900 outline-none w-full text-zinc-900"
               />
-              <textarea 
+              <textarea
                 value={editForm.description}
-                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 className="text-zinc-500 bg-transparent border-b border-zinc-200 outline-none w-full h-10 resize-none text-sm font-medium mt-1"
               />
             </div>
@@ -170,13 +188,13 @@ const GroupDetailPage: React.FC = () => {
         <div className="flex items-center gap-3">
           {isEditing ? (
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handleUpdate}
                 className="px-6 py-2.5 bg-zinc-800 text-white rounded-lg font-medium text-sm hover:bg-zinc-700 transition-colors flex items-center gap-2"
               >
                 <Save size={16} /> Save Changes
               </button>
-              <button 
+              <button
                 onClick={() => setIsEditing(false)}
                 className="p-2.5 bg-zinc-100 text-zinc-500 rounded-lg hover:bg-zinc-200 transition-colors"
               >
@@ -185,7 +203,7 @@ const GroupDetailPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setIsEditing(true)}
                 className="px-5 py-2.5 bg-white border border-zinc-200 text-zinc-700 rounded-lg font-medium text-sm hover:border-zinc-300 hover:bg-zinc-50 transition-all flex items-center gap-2"
               >
@@ -197,96 +215,136 @@ const GroupDetailPage: React.FC = () => {
       </header>
 
       <div>
-          <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-               <h2 className="text-sm font-bold text-zinc-800 uppercase tracking-wider">Participant Roster</h2>
-               <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-                 <CheckCircle2 size={13} className="text-emerald-500" />
-                 {group.participants.filter(p => p.has_completed_sociodemographic && !p.is_disqualified).length} / {group.member_count} onboarded
-               </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-zinc-50/30 border-b border-zinc-100">
-                    <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Participant</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Day Number</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Daily Submissions</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {group.participants.map((p) => (
-                    <tr key={p.user_id} className="hover:bg-zinc-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-zinc-100 flex items-center justify-center text-zinc-600 font-bold rounded-lg text-xs uppercase">
-                             {p.username.substring(0,2)}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-zinc-900 leading-tight">{p.full_name || 'Anonymous Researcher'}</div>
-                            <div className="text-xs text-zinc-400">@{p.username}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {p.is_disqualified ? (
-                          <span className="text-zinc-400 text-xs font-medium">—</span>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                             <div className="w-8 h-8 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[10px] font-bold">
-                                {p.current_experiment_day || 0}
-                             </div>
-                             <span className="text-xs font-medium text-zinc-500 uppercase">Day</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-zinc-800">
-                        {p.submission_count}
-                      </td>
-                      <td className="px-6 py-4">
-                        {p.is_disqualified ? (
-                           <div className="flex items-center gap-1.5 text-red-600 text-xs font-semibold">
-                              <AlertTriangle size={14} className="text-red-500" /> Disqualified
-                           </div>
-                        ) : p.has_completed_sociodemographic ? (
-                           <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
-                              <CheckCircle2 size={14} className="text-emerald-500" /> Active
-                           </div>
-                        ) : (
-                           <div className="flex items-center gap-1.5 text-zinc-500 text-xs font-medium">
-                              <Clock size={14} className="text-zinc-400" /> Pending Onboarding
-                           </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleteTarget(p);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {group.participants.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-16 text-center text-zinc-400 italic text-sm">
-                         No participants assigned to this experimental segment.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-zinc-800 uppercase tracking-wider">Participant Roster</h2>
+            <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
+              <CheckCircle2 size={13} className="text-emerald-500" />
+              {group.participants.filter(p => p.has_completed_sociodemographic && !p.is_disqualified).length} / {group.member_count} onboarded
             </div>
           </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-zinc-50/30 border-b border-zinc-100">
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Participant</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Day Number</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Daily Submissions</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {paginatedParticipants.map((p) => (
+                  <tr key={p.user_id} className="hover:bg-zinc-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-zinc-100 flex items-center justify-center text-zinc-600 font-bold rounded-lg text-xs uppercase">
+                          {p.username.substring(0, 2)}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-zinc-900 leading-tight">{p.full_name || 'Anonymous Researcher'}</div>
+                          <div className="text-xs text-zinc-400">@{p.username}</div>
+                          <div className="text-[11px] text-zinc-500 font-medium select-all mt-0.5">{p.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {p.is_disqualified ? (
+                        <span className="text-zinc-400 text-xs font-medium">—</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[10px] font-bold">
+                            {p.current_experiment_day || 0}
+                          </div>
+                          <span className="text-xs font-medium text-zinc-500 uppercase">Day</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-zinc-800">
+                      {p.submission_count}
+                    </td>
+                    <td className="px-6 py-4">
+                      {p.is_disqualified ? (
+                        <div className="flex items-center gap-1.5 text-red-600 text-xs font-semibold">
+                          <AlertTriangle size={14} className="text-red-500" /> Disqualified
+                        </div>
+                      ) : p.has_completed_sociodemographic ? (
+                        <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                          <CheckCircle2 size={14} className="text-emerald-500" /> Active
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-zinc-500 text-xs font-medium">
+                          <Clock size={14} className="text-zinc-400" /> Pending Onboarding
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleteTarget(p);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {group.participants.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-16 text-center text-zinc-400 italic text-sm">
+                      No participants assigned to this experimental segment.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/30 flex items-center justify-between flex-wrap gap-4">
+              <div className="text-xs text-zinc-500 font-medium">
+                Showing <span className="font-semibold text-zinc-800">{((currentPage - 1) * itemsPerPage) + 1}</span> to{' '}
+                <span className="font-semibold text-zinc-800">
+                  {Math.min(currentPage * itemsPerPage, group.participants.length)}
+                </span>{' '}
+                of <span className="font-semibold text-zinc-800">{group.participants.length}</span> participants
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:hover:bg-white transition-all"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${currentPage === page
+                        ? 'bg-zinc-800 border-zinc-800 text-white'
+                        : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                      }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:hover:bg-white transition-all"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <DeleteUserModal

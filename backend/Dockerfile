@@ -13,11 +13,24 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     gcc \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libpangocairo-1.0-0 \
+    libffi-dev \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    shared-mime-info \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy custom fonts
+COPY static/fonts/JameelNooriNastaleeq.ttf /usr/share/fonts/truetype/JameelNooriNastaleeq.ttf
+RUN fc-cache -f -v
 
 # Copy project
 COPY . /app/

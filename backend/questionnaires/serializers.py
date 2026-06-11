@@ -336,6 +336,11 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
             # Check and trigger risk-protocol alert
             check_and_trigger_risk_protocol(instance)
 
+            # Trigger Month-3 PERMA report task if 3_MONTHS milestone of PSYCHOMETRIC questionnaire is completed
+            if instance.milestone == '3_MONTHS' and instance.questionnaire.assessment_type == 'PSYCHOMETRIC':
+                from questionnaires.tasks import send_month_3_report_task
+                transaction.on_commit(lambda: send_month_3_report_task.delay(instance.id))
+
         return instance
 
 class ResponseSetDraftSerializer(serializers.ModelSerializer):
