@@ -67,6 +67,14 @@ class SignupSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This username is already taken.")
         return value
 
+    def validate_whatsapp_number(self, value):
+        if value:
+            val = value.strip()
+            if User.objects.filter(whatsapp_number=val).exists():
+                raise serializers.ValidationError("A user with this WhatsApp number already exists.")
+            return val
+        return value
+
     def validate_date_of_birth(self, value):
         if not value:
             raise serializers.ValidationError("Date of birth is mandatory.")

@@ -266,3 +266,39 @@ def test_signup_weak_password(api_client, db):
     response = api_client.post(url, payload)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "password" in response.data
+
+@pytest.mark.django_db
+def test_signup_duplicate_whatsapp_number(api_client, db):
+    Role.objects.get_or_create(name='Participant')
+    url = reverse('register')
+    payload1 = {
+        "username": "userw1",
+        "email": "userw1@example.com",
+        "password": "password123!",
+        "confirm_password": "password123!",
+        "whatsapp_number": "+923001234567",
+        "date_of_birth": "1990-01-01",
+        "consent_agreed": True,
+        "consent_version": "1.0",
+        "otp": "123456"
+    }
+    create_valid_otp("userw1@example.com")
+    response1 = api_client.post(url, payload1)
+    assert response1.status_code == status.HTTP_201_CREATED
+
+    payload2 = {
+        "username": "userw2",
+        "email": "userw2@example.com",
+        "password": "password123!",
+        "confirm_password": "password123!",
+        "whatsapp_number": "+923001234567",
+        "date_of_birth": "1991-01-01",
+        "consent_agreed": True,
+        "consent_version": "1.0",
+        "otp": "123456"
+    }
+    create_valid_otp("userw2@example.com")
+    response2 = api_client.post(url, payload2)
+    assert response2.status_code == status.HTTP_400_BAD_REQUEST
+    assert "whatsapp_number" in response2.data
+    assert "already exists" in str(response2.data["whatsapp_number"][0])

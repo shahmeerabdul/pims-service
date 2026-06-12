@@ -5,13 +5,22 @@ import { useTranslation } from 'react-i18next';
 import { User, Mail, Phone, Calendar, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, Loader2, Key, RefreshCw, X } from 'lucide-react';
 import PasswordInput from '../components/Auth/PasswordInput';
 
+const COUNTRY_CODES = [
+  { code: '+92', name: 'PK', label: 'Pakistan (+92)' },
+  { code: '+60', name: 'MY', label: 'Malaysia (+60)' },
+  { code: '+44', name: 'GB', label: 'United Kingdom (+44)' },
+  { code: '+1', name: 'US', label: 'United States (+1)' },
+  { code: '+966', name: 'SA', label: 'Saudi Arabia (+966)' },
+  { code: '+971', name: 'AE', label: 'United Arab Emirates (+971)' },
+];
+
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
     full_name: '',
     email: '',
-    whatsapp_number: '',
+    whatsapp_number: '+92',
     password: '',
     confirm_password: '',
     date_of_birth: '',
@@ -19,6 +28,9 @@ const RegisterPage: React.FC = () => {
     consent_version: '1.0',
     otp: '',
   });
+
+  const [countryCode, setCountryCode] = useState('+92');
+  const [rawPhone, setRawPhone] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
@@ -38,6 +50,26 @@ const RegisterPage: React.FC = () => {
     if (errors[name]) {
       const newErrors = { ...errors };
       delete newErrors[name];
+      setErrors(newErrors);
+    }
+  };
+
+  const handlePhoneChange = (code: string, number: string) => {
+    setCountryCode(code);
+    setRawPhone(number);
+    
+    // Clean any leading zeros and keep digits only
+    const digitsOnly = number.replace(/\D/g, '');
+    const cleanNumber = digitsOnly.replace(/^0+/, '');
+    
+    setFormData(prev => ({
+      ...prev,
+      whatsapp_number: `${code}${cleanNumber}`
+    }));
+    
+    if (errors.whatsapp_number) {
+      const newErrors = { ...errors };
+      delete newErrors.whatsapp_number;
       setErrors(newErrors);
     }
   };
@@ -252,18 +284,38 @@ const RegisterPage: React.FC = () => {
 
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-zinc-700" htmlFor="whatsapp_number">{t('register.whatsapp_number')}</label>
-                  <div className="relative">
-                    <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <input
-                      id="whatsapp_number"
-                      name="whatsapp_number"
-                      type="text"
-                      required
-                      placeholder={t('register.whatsapp_number_placeholder')}
-                      className={`input-minimal !ps-10 ${errors.whatsapp_number ? 'border-black border-2 ring-0' : ''}`}
-                      value={formData.whatsapp_number}
-                      onChange={handleChange}
-                    />
+                  <div className="flex gap-2">
+                    <div className="relative w-32 shrink-0">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => handlePhoneChange(e.target.value, rawPhone)}
+                        className="w-full h-10 px-3 bg-white border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-700 focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900 outline-none transition-all shadow-sm cursor-pointer appearance-none"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 0.5rem center',
+                          backgroundSize: '1.25em'
+                        }}
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="relative flex-1">
+                      <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                      <input
+                        id="raw_whatsapp_number"
+                        type="tel"
+                        required
+                        placeholder="3001234567"
+                        className={`input-minimal !ps-10 ${errors.whatsapp_number ? 'border-black border-2 ring-0' : ''}`}
+                        value={rawPhone}
+                        onChange={(e) => handlePhoneChange(countryCode, e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
 
