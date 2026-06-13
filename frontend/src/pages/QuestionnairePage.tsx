@@ -419,9 +419,10 @@ const QuestionnairePage: React.FC = () => {
       });
 
       // Introduce a minimum delay of 1.5 seconds to let the server transaction settle and show a premium loading experience
+      const isTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
       const [res] = await Promise.all([
         questionnairesApi.submitResponseSet(responseSetId, payload),
-        new Promise(resolve => setTimeout(resolve, 1500))
+        new Promise(resolve => setTimeout(resolve, isTest ? 0 : 1500))
       ]);
       
       const isSuicideTriggered = res.data?.suicide_risk_triggered;
