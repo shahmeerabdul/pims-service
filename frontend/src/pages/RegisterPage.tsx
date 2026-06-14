@@ -363,17 +363,17 @@ const RegisterPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 py-2">
+              <div className="flex items-center gap-3 py-2">
                 <input
                   id="consent_agreed"
                   name="consent_agreed"
                   type="checkbox"
                   required
-                  className="mt-1 w-4 h-4 rounded border-2 border-black text-black focus:ring-black cursor-pointer"
+                  className="h-4 w-4 shrink-0 rounded border-2 border-black text-black focus:ring-black cursor-pointer"
                   checked={formData.consent_agreed}
                   onChange={handleChange}
                 />
-                <label htmlFor="consent_agreed" className="text-xs text-zinc-700 leading-tight font-medium select-none">
+                <label htmlFor="consent_agreed" className="text-xs text-zinc-700 leading-normal font-medium select-none">
                   {t('register.consent_checkbox_label')}{' '}
                   <button
                     type="button"
