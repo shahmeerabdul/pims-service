@@ -426,3 +426,113 @@ def build_screen_out_email(first_name: str, links: dict[str, str] | None = None)
         'text_content': text_content,
         'html_content': html_content,
     }
+
+
+def get_exercise_button_link() -> str:
+    base_url = settings.SITE_BASE_URL.rstrip('/')
+    return f'{base_url}/dashboard'
+
+
+def _build_cta_button_html(link: str, label_en: str, label_ur: str) -> tuple[str, str, str, str]:
+    en_html = (
+        f'<div style="margin: 24px 0; text-align: center;">'
+        f'<a href="{link}" style="background-color: {NAVY}; color: #ffffff; padding: 14px 28px; '
+        f'text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">'
+        f'{label_en}</a></div>'
+    )
+    ur_html = (
+        f'<div style="margin: 24px 0; text-align: center;">'
+        f'<a href="{link}" style="background-color: {NAVY}; color: #ffffff; padding: 14px 28px; '
+        f'text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">'
+        f'{label_ur}</a></div>'
+    )
+    return en_html, ur_html, f'{label_en}: {link}', f'{label_ur}: {link}'
+
+
+def build_daily_nudge_email(
+    first_name: str,
+    *,
+    phase: int,
+    day_in_phase: int,
+    exercise_link: str | None = None,
+    links: dict[str, str] | None = None,
+) -> dict[str, str]:
+    from .booster_content import DAILY_NUDGE_EMAIL
+
+    links = links or get_email_links()
+    exercise_link = exercise_link or get_exercise_button_link()
+    subject_en = DAILY_NUDGE_EMAIL['subject_en'].format(phase=phase, day_in_phase=day_in_phase)
+    subject_ur = DAILY_NUDGE_EMAIL['subject_ur'].format(phase=phase, day_in_phase=day_in_phase)
+
+    lead_en = DAILY_NUDGE_EMAIL['lead_en'].format(
+        first_name=first_name, phase=phase, day_in_phase=day_in_phase,
+    )
+    lead_ur = DAILY_NUDGE_EMAIL['lead_ur'].format(
+        first_name=first_name, phase=phase, day_in_phase=day_in_phase,
+    )
+    cta_en, cta_ur, cta_en_text, cta_ur_text = _build_cta_button_html(
+        exercise_link,
+        DAILY_NUDGE_EMAIL['button_en'],
+        DAILY_NUDGE_EMAIL['button_ur'],
+    )
+
+    email_shell = {
+        'subject_en': subject_en,
+        'subject_ur': subject_ur,
+        'title_en': DAILY_NUDGE_EMAIL['title_en'],
+        'title_ur': DAILY_NUDGE_EMAIL['title_ur'],
+        'paragraphs_en': [lead_en.replace(f'Dear {first_name}, ', '')],
+        'paragraphs_ur': [lead_ur.replace(f'محترم {first_name}، ', '')],
+        'closing_en': '',
+        'closing_team_en': 'Psycheversity Research Team',
+        'closing_ur': '',
+        'closing_team_ur': 'سائیکیورسٹی ریسرچ ٹیم',
+    }
+    result = _build_simple_bilingual_email(
+        first_name,
+        email_shell,
+        links=links,
+        extra_english_html=cta_en,
+        extra_urdu_html=cta_ur,
+        extra_english_text=cta_en_text,
+        extra_urdu_text=cta_ur_text,
+    )
+    result['subject'] = build_bilingual_subject(subject_en, subject_ur)
+    return result
+
+
+def build_phase_invite_email(
+    first_name: str,
+    invite_key: str,
+    links: dict[str, str] | None = None,
+) -> dict[str, str]:
+    from .booster_content import PHASE_INVITE_TEMPLATES
+
+    template = PHASE_INVITE_TEMPLATES[invite_key]
+    shell = {
+        **template,
+        'closing_en': 'Warm regards,',
+        'closing_team_en': 'Psycheversity Research Team',
+        'closing_ur': 'نیک تمناؤں کے ساتھ،',
+        'closing_team_ur': 'سائیکیورسٹی ریسرچ ٹیم',
+    }
+    return _build_simple_bilingual_email(first_name, shell, links=links)
+
+
+def build_phase_complete_email(
+    first_name: str,
+    template_key: str,
+    links: dict[str, str] | None = None,
+) -> dict[str, str]:
+    from .booster_content import (
+        PHASE_1_COMPLETE_EMAIL,
+        PHASE_2_COMPLETE_EMAIL,
+        PHASE_REPORT_COMPLETE_EMAIL,
+    )
+
+    templates = {
+        'phase_1_complete': PHASE_1_COMPLETE_EMAIL,
+        'phase_2_complete': PHASE_2_COMPLETE_EMAIL,
+        **PHASE_REPORT_COMPLETE_EMAIL,
+    }
+    return _build_simple_bilingual_email(first_name, templates[template_key], links=links)

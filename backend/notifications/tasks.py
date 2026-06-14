@@ -132,15 +132,14 @@ def check_and_send_daily_reminders(reminder_type='morning'):
                 if reminder_type == 'evening':
                     msg = "Good evening! You haven't completed your daily reflection yet. There's still time!"
             
-            # Create a notification record
+            # Create a whatsapp notification only — bilingual E3 email is sent by emails.booster_tasks.
             n = Notification.objects.create(
                 user=user,
-                n_type='email', # Default to email as requested
+                n_type='whatsapp',
                 message=msg,
                 scheduled_time=timezone.now(),
                 status='pending'
             )
-            # Trigger the individual sending task
             send_notification.delay(n.id)
             reminded_count += 1
             

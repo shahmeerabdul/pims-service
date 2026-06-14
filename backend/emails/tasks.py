@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-def _send_participant_email(email_content: dict[str, str], recipient: str) -> None:
+def _send_participant_email(
+    email_content: dict[str, str],
+    recipient: str,
+    *,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> None:
     from django.core.mail import EmailMultiAlternatives
 
     msg = EmailMultiAlternatives(
@@ -27,6 +32,8 @@ def _send_participant_email(email_content: dict[str, str], recipient: str) -> No
         reply_to=[settings.PARTICIPANT_EMAIL_REPLY_TO],
     )
     msg.attach_alternative(email_content['html_content'], 'text/html')
+    for filename, content, mimetype in attachments or []:
+        msg.attach(filename, content, mimetype)
     msg.send(fail_silently=False)
 
 

@@ -368,6 +368,20 @@ class ResponseSetSubmitSerializer(serializers.ModelSerializer):
                     lambda user_id=user.user_id: send_welcome_email_task.delay(user_id)
                 )
 
+            if (
+                instance.questionnaire.assessment_type == 'PSYCHOMETRIC'
+                and instance.milestone in ('7_DAYS', '1_MONTH', '6_MONTHS', '1_YEAR')
+            ):
+                from emails.booster_schedule import MILESTONE_PHASE_COMPLETE
+                from emails.booster_tasks import send_phase_complete_email_task
+
+                template_key = MILESTONE_PHASE_COMPLETE[instance.milestone]
+                transaction.on_commit(
+                    lambda user_id=user.user_id, key=template_key: send_phase_complete_email_task.delay(
+                        user_id, key
+                    )
+                )
+
             # Trigger Month-3 PERMA report task if 3_MONTHS milestone of PSYCHOMETRIC questionnaire is completed
             if instance.milestone == '3_MONTHS' and instance.questionnaire.assessment_type == 'PSYCHOMETRIC':
                 from questionnaires.tasks import send_month_3_report_task

@@ -274,10 +274,13 @@ if 'test' in sys.argv or 'pytest' in sys.modules:
 # Celery Beat Schedule
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
-    'daily-morning-reminder': {
-        'task': 'notifications.tasks.check_and_send_daily_reminders',
+    'booster-daily-nudge': {
+        'task': 'emails.booster_tasks.send_booster_daily_nudges',
         'schedule': crontab(hour=9, minute=0),
-        'args': ('morning',),
+    },
+    'booster-phase-invite': {
+        'task': 'emails.booster_tasks.send_booster_phase_invites',
+        'schedule': crontab(hour=9, minute=15),
     },
     'daily-evening-reminder': {
         'task': 'notifications.tasks.check_and_send_daily_reminders',

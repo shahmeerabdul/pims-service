@@ -99,9 +99,12 @@ class TestMonth3Report:
         assert len(mail.outbox) == 1
         email = mail.outbox[0]
         assert email.to == ['participant@test.com']
-        assert "Three Months PERMA Profiler Report" in email.subject
-        assert "Please continue to your next entries" in email.body
-        assert "براہ کرم اپنے اگلے اندراجات جاری رکھیں" in email.body
+        assert "Phase complete" in email.subject
+        assert "wellbeing summary" in email.subject
+        assert "You have completed this phase" in email.body
+        assert "PERMA Profiler" in email.body
+        assert "following phase will begin" in email.body
+        assert "آپ نے یہ مرحلہ مکمل کر لیا ہے" in email.body
 
         # 4. Assert PDF attachment is present
         assert len(email.attachments) == 1

@@ -29,7 +29,6 @@ def send_month_3_report_task(response_set_id):
     Generate and email the Month-3 PERMA trajectory report PDF to the participant.
     """
     from questionnaires.models import ResponseSet
-    from django.core.mail import EmailMultiAlternatives
     from django.conf import settings
     from django.template.loader import render_to_string
     from django.utils import timezone
@@ -171,51 +170,17 @@ def send_month_3_report_task(response_set_id):
         # 4. Generate PDF via WeasyPrint
         pdf_bytes = HTML(string=html_string).write_pdf()
 
-        # 5. Email PDF Attachment
-        subject = "Three Months PERMA Profiler Report / تین ماہ کی PERMA پروفائلر رپورٹ"
-        text_content = (
-            f"Dear Participant,\n\n"
-            f"Please find attached your Month-3 PERMA feedback report. Please continue to your next entries.\n\n"
-            f"Sincerely,\n"
-            f"PIMS Team\n\n"
-            f"--------------------------------------------------\n\n"
-            f"محترم شریک کار،\n\n"
-            f"براہ کرم منسلک فائل میں اپنے تیسرے مہینے کی PERMA فیڈبیک رپورٹ حاصل کریں۔ براہ کرم اپنے اگلے اندراجات جاری رکھیں۔\n\n"
-            f"شکریہ،\n"
-            f"PIMS ٹیم"
+        # 5. Email PDF Attachment using doc-style E8 bilingual template
+        from emails.builder import build_phase_complete_email, get_first_name
+        from emails.tasks import _send_participant_email
+
+        first_name = get_first_name(user)
+        email_content = build_phase_complete_email(first_name, 'phase_3_report')
+        _send_participant_email(
+            email_content,
+            user.email,
+            attachments=[('pims_month3_report.pdf', pdf_bytes, 'application/pdf')],
         )
-        
-        html_body = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
-            <h2 style="color: #2E4E90; margin-top: 0;">PIMS Feedback Report</h2>
-            <p style="font-size: 15px; color: #18181b;">Dear Participant,</p>
-            <p style="color: #3f3f46; font-size: 15px; line-height: 1.5;">
-                Please find attached your Month-3 PERMA feedback report in PDF format. Please continue to your next entries.
-            </p>
-            <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
-            <div style="direction: rtl; text-align: right; font-family: Arial, sans-serif;">
-                <p style="font-size: 16px; color: #2E4E90; margin-top: 0;">پی آئی ایم ایس فیڈبیک رپورٹ</p>
-                <p style="font-size: 15px; color: #18181b;">محترم شریک کار،</p>
-                <p style="color: #3f3f46; font-size: 15px; line-height: 1.5;">
-                    براہ کرم منسلک فائل میں اپنے تیسرے مہینے کی PERMA فیڈبیک رپورٹ حاصل کریں۔ براہ کرم اپنے اگلے اندراجات جاری رکھیں۔
-                </p>
-            </div>
-            <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
-            <p style="color: #71717a; font-size: 12px; margin-bottom: 0;">
-                This is an automated message from the Pakistan Intervention Management System. Please do not reply directly to this email.
-            </p>
-        </div>
-        """
-        
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_body, "text/html")
-        msg.attach("pims_month3_report.pdf", pdf_bytes, "application/pdf")
-        msg.send(fail_silently=False)
         
         logger.info("Successfully sent Month-3 report email to user %s (%s)", user.username, user.email)
         return {"status": "sent", "recipient": user.email}
