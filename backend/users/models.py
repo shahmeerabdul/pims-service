@@ -124,8 +124,11 @@ class User(AbstractUser):
         if Submission.objects.filter(user=self, activity_wave='PRE_T1', experiment_day=7).exists():
             return True
 
-        due_date = self.onboarding_completed_at + timezone.timedelta(days=7)
-        return timezone.now() >= due_date
+        # Date-based logic to avoid same-day conflicts
+        today = timezone.localdate()
+        onboard_date = timezone.localtime(self.onboarding_completed_at).date()
+        due_date = onboard_date + timezone.timedelta(days=7)
+        return today >= due_date
 
     @property
     def is_t2_due(self):
@@ -170,18 +173,19 @@ class User(AbstractUser):
         if not self.onboarding_completed_at:
             return None
 
-        now = timezone.now()
+        today = timezone.localdate()
+        onboard_date = timezone.localtime(self.onboarding_completed_at).date()
         due = None
 
         # Evaluate timeline sequentially
         
         # 1. 7_DAYS (T1 post-test)
         if '7_DAYS' not in completed_milestones:
-            due_date = self.onboarding_completed_at + timezone.timedelta(days=7)
+            due_date = onboard_date + timezone.timedelta(days=7)
             from activities.models import Submission
             day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T1', experiment_day=7).exists()
-            if now >= due_date or day7_submitted:
-                if now - due_date >= timezone.timedelta(days=14) and not day7_submitted:
+            if today >= due_date or day7_submitted:
+                if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                     # 7_DAYS has expired. Move on.
                     pass
                 else:
@@ -197,17 +201,17 @@ class User(AbstractUser):
                     t1_completed_at = t1_rs.completed_at
             
             if t1_completed_at:
-                ref_date = t1_completed_at
+                ref_date = timezone.localtime(t1_completed_at).date()
             else:
-                ref_date = self.onboarding_completed_at + timezone.timedelta(days=7)
+                ref_date = onboard_date + timezone.timedelta(days=7)
 
             # 1.5. 1_MONTH (T-First-Month follow-up)
             if '1_MONTH' not in completed_milestones:
                 due_date = ref_date + timezone.timedelta(days=23)  # 30 days total since onboarding
                 from activities.models import Submission
                 day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T_1M', experiment_day=7).exists()
-                if now >= due_date or day7_submitted:
-                    if now - due_date >= timezone.timedelta(days=14) and not day7_submitted:
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 1_MONTH has expired.
                         pass
                     else:
@@ -218,8 +222,8 @@ class User(AbstractUser):
                 due_date = ref_date + timezone.timedelta(days=90)
                 from activities.models import Submission
                 day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T2', experiment_day=7).exists()
-                if now >= due_date or day7_submitted:
-                    if now - due_date >= timezone.timedelta(days=14) and not day7_submitted:
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 3_MONTHS has expired.
                         pass
                     else:
@@ -230,8 +234,8 @@ class User(AbstractUser):
                 due_date = ref_date + timezone.timedelta(days=180)
                 from activities.models import Submission
                 day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T3', experiment_day=7).exists()
-                if now >= due_date or day7_submitted:
-                    if now - due_date >= timezone.timedelta(days=14) and not day7_submitted:
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 6_MONTHS has expired.
                         pass
                     else:
@@ -242,20 +246,22 @@ class User(AbstractUser):
                 due_date = ref_date + timezone.timedelta(days=365)
                 from activities.models import Submission
                 day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T4', experiment_day=7).exists()
-                if now >= due_date or day7_submitted:
-                    if now - due_date >= timezone.timedelta(days=14) and not day7_submitted:
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 1_YEAR has expired.
                         pass
                     else:
                         due = '1_YEAR'
 
         # Cache until midnight
+        now = timezone.now()
         tomorrow = (now + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         seconds_until_midnight = int((tomorrow - now).total_seconds())
         if seconds_until_midnight > 0:
             cache.set(cache_key, due if due is not None else "NONE", timeout=seconds_until_midnight)
 
         return due
+
 
     @property
     def has_consecutive_misses(self):
