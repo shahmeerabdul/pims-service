@@ -670,18 +670,93 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING(f"'{battery_title}' already exists. Skipping."))
 
-    def _create_questions_for_questionnaire(self, questionnaire, data):
-        for q_data in data:
-            q = Question.objects.create(
-                questionnaire=questionnaire,
-                content=q_data["content"],
-                type=q_data["type"],
-                order=q_data["order"]
-            )
-            for opt_label, opt_val in q_data["options"]:
-                Option.objects.create(
-                    question=q,
-                    label=opt_label,
-                    numeric_value=opt_val,
-                    order=opt_val
-                )
+    def _sync_questions_for_questionnaire(self, questionnaire, data):
+        """
+        Idempotent sync — creates or updates questions identified by order number.
+
+        Algorithm:
+          Pass 1 — move all existing questions to temporary NEGATIVE orders
+                   (avoids unique-order conflicts during the reconcile).
+          Pass 2 — for each desired question:
+                   • if an old question existed at that order, update it in-place
+                     (preserving PK and all linked Response rows).
+                   • otherwise create a fresh Question.
+          Pass 3 — upsert each option by numeric_value (update label; create if new).
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            # ── Pass 1: park all existing questions at temp high orders ──────────
+            # (avoids unique-order conflicts during the reconcile; uses offset
+            #  instead of negative values to satisfy CHECK(order >= 0) constraint)
+            TEMP_OFFSET = 10000
+            existing = list(questionnaire.questions.order_by("order"))
+            existing_by_order = {}
+            for q in existing:
+                orig_order = q.order
+                existing_by_order[orig_order] = q
+                q.order = TEMP_OFFSET + orig_order
+                q.save(update_fields=["order"])
+
+            # ── Pass 2: upsert each desired question ─────────────────────────
+            for q_data in data:
+                target_order = q_data["order"]
+                content      = q_data["content"]
+                q_type       = q_data["type"]
+                required     = q_data.get("required", True)
+                options      = q_data.get("options", [])
+
+                old_q = existing_by_order.get(target_order)
+
+                if old_q:
+                    # Update existing record in-place (keeps PK → Response FKs intact)
+                    old_q.order    = target_order
+                    old_q.content  = content
+                    old_q.type     = q_type
+                    old_q.required = required
+                    old_q.save(update_fields=["order", "content", "type", "required"])
+                    q_obj = old_q
+                else:
+                    q_obj = Question.objects.create(
+                        questionnaire=questionnaire,
+                        content=content,
+                        type=q_type,
+                        order=target_order,
+                        required=required,
+                    )
+
+                # ── Pass 3: upsert options by numeric_value ──────────────────
+                existing_opts = {opt.numeric_value: opt for opt in q_obj.options.all()}
+                desired_vals = {opt_val for _, opt_val in options}
+                for opt_label, opt_val in options:
+                    if opt_val in existing_opts:
+                        opt = existing_opts[opt_val]
+                        if opt.label != opt_label:
+                            opt.label = opt_label
+                            opt.save(update_fields=["label"])
+                    else:
+                        Option.objects.create(
+                            question=q_obj,
+                            label=opt_label,
+                            numeric_value=opt_val,
+                            order=opt_val,
+                        )
+
+                # ── Pass 3b: prune stale options not in the desired set ───────
+                # Stale options arise when a question's scale changes (e.g. 0-10
+                # → 0-4 due to order reassignment). Response rows use SET_NULL +
+                # cached selected_option_value so scoring survives the deletion.
+                for stale_val, stale_opt in existing_opts.items():
+                    if stale_val not in desired_vals:
+                        stale_opt.delete()
+
+            # Any remaining questions parked at high temp orders are orphans
+            # (orders no longer in the desired layout). We leave them rather than
+            # deleting, to protect any linked Response data.
+            orphans = questionnaire.questions.filter(order__gte=TEMP_OFFSET)
+            orphan_count = orphans.count()
+            if orphan_count:
+                self.stdout.write(self.style.WARNING(
+                    f"  {orphan_count} orphaned question(s) left at negative orders "
+                    f"(have linked Response data — not deleted)."
+                ))
