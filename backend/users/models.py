@@ -303,7 +303,7 @@ class User(AbstractUser):
     @property
     def consecutive_misses_message(self):
         if self.has_consecutive_misses:
-            return "We noticed you missed your reflection for a couple of days. Research shows consistency is key to benefit from the intervention. Let's get back on track today!"
+            return "We noticed you missed your reflection for a couple of days. Research shows consistency is key to benefit from the intervention. Let's get back on track today! | ہم نے دیکھا کہ آپ گزشتہ چند دن اپنی انعکاسی تحریر نہیں لکھ سکے۔ تحقیق سے پتہ چلتا ہے کہ اس مشق سے فائدہ اٹھانے کے لیے تسلسل سب سے اہم ہے۔ آئیے آج سے دوبارہ شروعات کریں!"
         return ""
 
     @property

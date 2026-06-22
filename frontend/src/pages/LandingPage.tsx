@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Phone, Mail, HelpCircle, FileText, ShieldAlert, Home, Info, ExternalLink } from 'lucide-react';
+import { ArrowRight, Phone, Mail, HelpCircle, FileText, ShieldAlert, Home, Info, ExternalLink, ChevronDown } from 'lucide-react';
 import pimsLogo from '../assets/pims_logo.png';
 import ukmLogo from '../assets/ukm_logo.jpeg';
 
@@ -152,8 +152,19 @@ const BilingualHelpline: React.FC<{ nameEn: string; nameUr: string; phone: strin
   </div>
 );
 
+const NAV_ITEMS = [
+  { id: 'home', en: 'Home', ur: 'ہوم', icon: <Home size={16} /> },
+  { id: 'info', en: 'Information', ur: 'معلومات', icon: <Info size={16} /> },
+  { id: 'faq', en: 'FAQ', ur: 'سوالات', icon: <HelpCircle size={16} /> },
+  { id: 'crisis', en: 'Crisis Resources', ur: 'ہنگامی مدد', icon: <ShieldAlert size={16} /> },
+  { id: 'contact', en: 'Contact', ur: 'رابطہ', icon: <Mail size={16} /> },
+  { id: 'register', en: 'Registration', ur: 'رجسٹریشن', icon: <FileText size={16} /> },
+] as const;
+
 const LandingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'info' | 'faq' | 'crisis' | 'contact' | 'register'>('home');
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const activeNavItem = NAV_ITEMS.find(t => t.id === activeTab)!;
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6 md:py-10 flex flex-col gap-8">
@@ -178,35 +189,55 @@ const LandingPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Mobile Nav Dropdown — visible only below lg */}
+      <div className="lg:hidden relative">
+        <button
+          onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+          className="w-full flex items-center justify-between gap-3 bg-white border border-zinc-200 rounded-xl px-4 py-3 shadow-sm font-semibold text-sm text-zinc-700"
+        >
+          <span className="flex items-center gap-2 text-[#2E4E90]">
+            <span className="text-zinc-500">{activeNavItem.icon}</span>
+            {activeNavItem.en}
+            <span className="font-urdu text-zinc-500 text-xs" dir="rtl">{activeNavItem.ur}</span>
+          </span>
+          <ChevronDown size={18} className={`text-zinc-400 transition-transform duration-200 ${isMobileNavOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isMobileNavOpen && (
+          <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden">
+            {NAV_ITEMS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id as any); setIsMobileNavOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-semibold border-b border-zinc-100 last:border-0 transition-colors ${activeTab === tab.id ? 'bg-[#2E4E90] text-white' : 'text-zinc-700 hover:bg-zinc-50'}`}
+              >
+                <span className="flex items-center gap-2">{tab.icon} {tab.en}</span>
+                <span className="font-urdu text-xs" dir="rtl">{tab.ur}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Main Microsite Body */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-        {/* Navigation Sidebar */}
-        <aside className="lg:col-span-1 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
-          <nav className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-2">
-            {[
-              { id: 'home', en: 'Home', ur: 'ہوم', icon: <Home size={16} /> },
-              { id: 'info', en: 'Information', ur: 'معلومات', icon: <Info size={16} /> },
-              { id: 'faq', en: 'FAQ', ur: 'سوالات', icon: <HelpCircle size={16} /> },
-              { id: 'crisis', en: 'Crisis Resources', ur: 'ہنگامی مدد', icon: <ShieldAlert size={16} /> },
-              { id: 'contact', en: 'Contact', ur: 'رابطہ', icon: <Mail size={16} /> },
-              { id: 'register', en: 'Registration', ur: 'رجسٹریشن', icon: <FileText size={16} /> }
-            ].map((tab) => (
+        {/* Navigation Sidebar — desktop only */}
+        <aside className="hidden lg:block lg:col-span-1 bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+          <nav className="flex flex-col gap-2">
+            {NAV_ITEMS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex flex-col lg:flex-row items-center lg:justify-between gap-1 lg:gap-4 w-full px-3 py-3 lg:px-4 rounded-xl font-semibold text-xs md:text-sm transition-all text-center lg:text-left outline-none border-b-2 lg:border-b-0 lg:border-l-4 ${
+                className={`flex flex-row items-center justify-between gap-4 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all text-left outline-none border-l-4 ${
                   activeTab === tab.id
                     ? 'bg-[#2E4E90] text-white border-[#C8A951] shadow-md'
                     : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 border-transparent'
                 }`}
               >
-                <div className="flex flex-col lg:flex-row items-center gap-1.5">
-                  <span className={activeTab === tab.id ? 'text-white' : 'text-zinc-500'}>
-                    {tab.icon}
-                  </span>
-                  <span className="font-latin text-[11px] sm:text-xs lg:text-sm">{tab.en}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={activeTab === tab.id ? 'text-white' : 'text-zinc-500'}>{tab.icon}</span>
+                  <span className="font-latin">{tab.en}</span>
                 </div>
-                <span className="font-urdu text-[10px] sm:text-xs lg:text-sm leading-none lg:mt-0 mt-0.5">{tab.ur}</span>
+                <span className="font-urdu text-sm leading-none">{tab.ur}</span>
               </button>
             ))}
           </nav>

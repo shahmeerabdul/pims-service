@@ -132,6 +132,7 @@ export const questionnairesApi = {
 export const activitiesApi = {
   getCurrentActivity: () => api.get('/activities/daily/current/'),
   submitActivity: (data: { content: string }) => api.post('/activities/daily/submit/', data),
+  getSubmissions: () => api.get('/activities/all-submissions/'),
 };
 
 // Aliases for compatibility with upstream UI components

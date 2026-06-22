@@ -143,7 +143,7 @@ describe('ActivityPage', () => {
     });
   });
 
-  it('performs word counting and enforces limits (20 - 200 words)', async () => {
+  it('performs word counting and enforces limits (10 - 200 words)', async () => {
     const mockActivity = {
       id: 12,
       title: 'Structured Reflection',
@@ -168,14 +168,14 @@ describe('ActivityPage', () => {
     const submitBtn = screen.queryByRole('button', { name: /Submit Activity/i });
     expect(submitBtn).toBeDisabled();
 
-    // 1. Text is less than 20 words
+    // 1. Text is less than 10 words
     fireEvent.change(textareas[0], { target: { value: 'This is short' } });
-    expect(screen.getByText('Minimum 20 words required.')).toBeInTheDocument();
+    expect(screen.getByText('Minimum 10 words required.')).toBeInTheDocument();
 
-    // 2. Text is exactly 20 words
-    const validText = Array(20).fill('word').join(' ');
+    // 2. Text is exactly 10 words
+    const validText = Array(10).fill('word').join(' ');
     fireEvent.change(textareas[0], { target: { value: validText } });
-    expect(screen.queryByText('Minimum 20 words required.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Minimum 10 words required.')).not.toBeInTheDocument();
 
     // 3. Text is close to 200 words (warning zone)
     const warningText = Array(185).fill('word').join(' ');

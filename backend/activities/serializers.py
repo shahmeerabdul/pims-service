@@ -63,8 +63,8 @@ class DailySubmissionSerializer(serializers.ModelSerializer):
         if 'entry_1' in data or 'entry_2' in data or 'entry_3' in data:
             for field_name, entry_text in [('entry_1', entry_1), ('entry_2', entry_2), ('entry_3', entry_3)]:
                 words = count_words(entry_text)
-                if words < 20:
-                    raise serializers.ValidationError({field_name: "Minimum word count per entry is 20 words."})
+                if words < 10:
+                    raise serializers.ValidationError({field_name: "Minimum word count per entry is 10 words."})
                 if words > 200:
                     raise serializers.ValidationError({field_name: "Maximum word count per entry is 200 words."})
 

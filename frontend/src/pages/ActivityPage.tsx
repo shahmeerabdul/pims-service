@@ -484,13 +484,13 @@ const ActivityPage: React.FC = () => {
   const w2 = countWords(entry2);
   const w3 = countWords(entry3);
 
-  const isValidCount = (w: number) => w >= 20 && w <= 200;
+  const isValidCount = (w: number) => w >= 10 && w <= 200;
   const canSubmit = !isLocked && isValidCount(w1) && isValidCount(w2) && isValidCount(w3);
 
   const renderTextarea = (index: number, value: string, count: number, label: { en: string; ur: string }) => {
     const isWarning = count >= 180 && count <= 200;
     const isError = count > 200;
-    const isBelowMin = count > 0 && count < 20;
+    const isBelowMin = count > 0 && count < 10;
 
     // Retrieve category details if Group 3 or Group 4
     let categoryDetail = null;
@@ -554,7 +554,7 @@ const ActivityPage: React.FC = () => {
         <div className="flex justify-between items-center px-1">
           {isBelowMin && (
             <p className="text-xs text-amber-600 font-medium">
-              {i18n.language === 'ur' ? "کم از کم 20 الفاظ درکار ہیں۔" : "Minimum 20 words required."}
+              {i18n.language === 'ur' ? "کم از کم 10 الفاظ درکار ہیں۔" : "Minimum 10 words required."}
             </p>
           )}
           {isWarning && (
