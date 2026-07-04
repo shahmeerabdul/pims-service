@@ -4,7 +4,7 @@ A comprehensive, full-stack platform designed to facilitate phased psychological
 
 ## Core Features & Technical Highlights
 
-- **Automated Participant Flow**: Registration and onboarding flow with JWT-based authentication (SimpleJWT), digital consent management, and automated baseline/post-test questionnaire administration.
+- **Automated Participant Flow**: Registration and onboarding flow with JWT-based authentication (SimpleJWT),  digital consent management, and automated baseline/post-test questionnaire administration.
 - **Dynamic Group Management**: Custom assignment algorithm (`groups/services.py`) that handles intelligent, balanced participant distribution into experimental control and treatment groups once the baseline (T0 SIGNUP) assessment is completed.
 - **Longitudinal Daily Activities**: Timeline logic engine that serves phase-specific activities dynamically based on `experiment_day`. Features strict midnight-reset validation (standardized on Asia/Karachi time) and Redis-backed caching for state management.
 - **Multilingual UI (i18n)**: Fully integrated localization (English and Urdu) via `react-i18next` with logic for Right-to-Left (RTL) styling and logical CSS properties.
