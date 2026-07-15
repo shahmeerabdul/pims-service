@@ -206,6 +206,31 @@ def test_signup_duplicate_username(api_client, db):
     assert "taken" in error_msg or "exists" in error_msg
 
 @pytest.mark.django_db
+def test_profile_patch_cannot_change_role_or_group(authenticated_client, test_user):
+    """Mass assignment protection: role and group must be read-only on the profile endpoint."""
+    from users.models import Role
+    from groups.models import Group
+
+    other_role, _ = Role.objects.get_or_create(name='Admin', defaults={'description': 'Admin role'})
+    other_group, _ = Group.objects.get_or_create(name='OtherGroup')
+
+    original_role_id = test_user.role_id
+    original_group_id = test_user.group_id
+
+    url = reverse('profile')
+    response = authenticated_client.patch(
+        url,
+        {'role': other_role.pk, 'group': other_group.pk},
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    test_user.refresh_from_db()
+    assert test_user.role_id == original_role_id, "role must not be changed via profile PATCH"
+    assert test_user.group_id == original_group_id, "group must not be changed via profile PATCH"
+
+
+@pytest.mark.django_db
 def test_admin_user_list(admin_client, test_user):
     url = reverse('admin_user_list')
     response = admin_client.get(url)
@@ -266,3 +291,39 @@ def test_signup_weak_password(api_client, db):
     response = api_client.post(url, payload)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "password" in response.data
+
+@pytest.mark.django_db
+def test_signup_duplicate_whatsapp_number(api_client, db):
+    Role.objects.get_or_create(name='Participant')
+    url = reverse('register')
+    payload1 = {
+        "username": "userw1",
+        "email": "userw1@example.com",
+        "password": "password123!",
+        "confirm_password": "password123!",
+        "whatsapp_number": "+923001234567",
+        "date_of_birth": "1990-01-01",
+        "consent_agreed": True,
+        "consent_version": "1.0",
+        "otp": "123456"
+    }
+    create_valid_otp("userw1@example.com")
+    response1 = api_client.post(url, payload1)
+    assert response1.status_code == status.HTTP_201_CREATED
+
+    payload2 = {
+        "username": "userw2",
+        "email": "userw2@example.com",
+        "password": "password123!",
+        "confirm_password": "password123!",
+        "whatsapp_number": "+923001234567",
+        "date_of_birth": "1991-01-01",
+        "consent_agreed": True,
+        "consent_version": "1.0",
+        "otp": "123456"
+    }
+    create_valid_otp("userw2@example.com")
+    response2 = api_client.post(url, payload2)
+    assert response2.status_code == status.HTTP_400_BAD_REQUEST
+    assert "whatsapp_number" in response2.data
+    assert "already exists" in str(response2.data["whatsapp_number"][0])

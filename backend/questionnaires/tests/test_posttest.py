@@ -149,6 +149,7 @@ def test_posttest_submission_marks_completed(user_at_day7, posttest_questionnair
         user=user_at_day7,
         questionnaire=posttest_questionnaire,
         status='DRAFT',
+        milestone='7_DAYS',
     )
 
     # Get the question and option for the post-test

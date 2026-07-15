@@ -18,39 +18,63 @@ def send_notification(self, notification_id):
             notification.user_id,
         )
         
-        # Send actual email if n_type is 'email' and it contains 'reflection'
-        if notification.n_type == 'email' and 'reflection' in notification.message.lower():
+        # Send actual email if n_type is 'email'
+        if notification.n_type == 'email':
             from django.core.mail import EmailMultiAlternatives
             from django.conf import settings
             
             user = notification.user
+            if not user.is_active:
+                logger.error("User %s is inactive, skipping email send.", user.username)
+                notification.status = 'failed'
+                notification.save(update_fields=['status'])
+                return {'status': 'failed', 'reason': 'inactive_user', 'notification_id': notification_id}
+                
+            if not user.email:
+                logger.error("User %s does not have an email address configured, skipping email send.", user.username)
+                notification.status = 'failed'
+                notification.save(update_fields=['status'])
+                return {'status': 'failed', 'reason': 'missing_email', 'notification_id': notification_id}
+                
             name = user.display_name
             
-            subject = "PIMS Daily Activity Reminder"
-            text_content = f"Hi {name},\n\n{notification.message}\n\nPlease complete your reflection today: https://psycheversity.com/dashboard"
+            msg_lower = notification.message.lower()
+            if 'reflection' in msg_lower:
+                from emails.builder import (
+                    build_daily_nudge_email,
+                    build_evening_reminder_email,
+                    build_consecutive_misses_email,
+                    get_first_name,
+                )
+                from emails.booster_schedule import get_active_writing_day
+                from emails.tasks import _send_participant_email
+
+                first_name = get_first_name(user)
+                writing_day = get_active_writing_day(user)
+                if writing_day:
+                    phase = writing_day.phase_number
+                    day = writing_day.day_in_phase
+                else:
+                    phase = 1
+                    day = 1
+
+                if 'missed' in msg_lower:
+                    email_content = build_consecutive_misses_email(first_name, phase=phase, day_in_phase=day)
+                elif 'evening' in msg_lower:
+                    email_content = build_evening_reminder_email(first_name, phase=phase, day_in_phase=day)
+                else:
+                    email_content = build_daily_nudge_email(first_name, phase=phase, day_in_phase=day)
+
+                _send_participant_email(email_content, user.email)
+                logger.info("Successfully sent daily activity nudge email to %s", user.email)
+            else:
+                from emails.builder import build_assessment_due_email
+                from emails.tasks import _send_participant_email
+
+                email_content = build_assessment_due_email(notification.message)
+                _send_participant_email(email_content, user.email)
+                logger.info("Successfully sent bilingual assessment due/overdue email notification to %s", user.email)
             
-            html_content = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e4e4e7; border-radius: 8px;">
-                <h2 style="color: #18181b; margin-top: 0;">Daily Reflection Reminder</h2>
-                <p style="font-size: 16px; color: #18181b;">Hi {name},</p>
-                <p style="color: #3f3f46; font-size: 16px; line-height: 1.5;">{notification.message}</p>
-                <div style="margin: 25px 0;">
-                    <a href="https://psycheversity.com/dashboard" style="background-color: #18181b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Complete Today's Reflection</a>
-                </div>
-                <hr style="border: 0; border-top: 1px solid #e4e4e7; margin: 20px 0;">
-                <p style="color: #71717a; font-size: 12px; margin-bottom: 0;">This is an automated message from the Psychological Intervention Platform. Please do not reply directly to this email.</p>
-            </div>
-            """
-            
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[user.email]
-            )
-            msg.attach_alternative(html_content, "text/html")
-            msg.send(fail_silently=False)
-            logger.info("Successfully sent daily reflection email to %s", user.email)
             
         notification.status = 'sent'
         notification.save(update_fields=['status'])
@@ -105,15 +129,15 @@ def check_and_send_daily_reminders(reminder_type='morning'):
                 if reminder_type == 'evening':
                     msg = "Good evening! You haven't completed your daily reflection yet. There's still time!"
             
-            # Create a notification record
+            # Create email notification for daily reflection reminder
+            n_type = 'email'
             n = Notification.objects.create(
                 user=user,
-                n_type='email', # Default to email as requested
+                n_type=n_type,
                 message=msg,
                 scheduled_time=timezone.now(),
                 status='pending'
             )
-            # Trigger the individual sending task
             send_notification.delay(n.id)
             reminded_count += 1
             
@@ -317,7 +341,7 @@ def run_assessment_graduated_reminders():
         elif overdue_days == 7:
             n_type = 'sms'
             message = f"PIMS Alert: Your {label} assessment is now 7 days overdue. Please complete it soon to continue in the study."
-        elif overdue_days == 10:
+        elif overdue_days >= 10:
             # Create a Call ticket
             exists = SupportTicket.objects.filter(
                 user=user,

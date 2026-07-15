@@ -120,6 +120,10 @@ export const questionnairesApi = {
   triggerAdminLongitudinalExport: (groupName?: string) => api.post('/admin/tools/export/longitudinal/csv/', {
     group: groupName || 'All'
   }),
+  triggerAdminDailyEntriesExport: (groupName?: string, waveName?: string) => api.post('/admin/tools/export/daily-entries/csv/', {
+    group: groupName || 'All',
+    wave: waveName || 'All'
+  }),
   getAdminExportStatus: (taskId: string) => api.get(`/admin/tools/export/status/${taskId}/`),
 
   exportQuestionnaireData: (id: string) => api.get(`/questionnaires/${id}/export/`, { responseType: 'blob' }),
@@ -128,6 +132,7 @@ export const questionnairesApi = {
 export const activitiesApi = {
   getCurrentActivity: () => api.get('/activities/daily/current/'),
   submitActivity: (data: { content: string }) => api.post('/activities/daily/submit/', data),
+  getSubmissions: () => api.get('/activities/all-submissions/'),
 };
 
 // Aliases for compatibility with upstream UI components
@@ -136,6 +141,8 @@ export const getGroupDetail = groupsApi.getDetail;
 export const updateGroup = groupsApi.update;
 
 export const usersApi = {
+  deleteAccount: (confirmation: string, password: string) =>
+    api.post('/users/profile/delete/', { confirmation, password }),
   deleteUser: (userId: number, confirmation: string) =>
     api.post(`/users/admin/users/${userId}/delete/`, { confirmation }),
 };

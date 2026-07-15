@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 
 interface Option {
   id: string;
@@ -15,7 +14,6 @@ interface LikertSliderProps {
 }
 
 const LikertSlider: React.FC<LikertSliderProps> = ({ options, value, onChange }) => {
-  const { i18n } = useTranslation();
   const sortedOptions = [...options].sort((a, b) => a.numeric_value - b.numeric_value);
   const min = sortedOptions[0]?.numeric_value || 0;
   const max = sortedOptions[sortedOptions.length - 1]?.numeric_value || 10;
@@ -70,50 +68,53 @@ const LikertSlider: React.FC<LikertSliderProps> = ({ options, value, onChange })
 
   const percentage = (( (value || min) - min) / (max - min)) * 100;
 
+  const parseAnchor = (lbl: string) => {
+    if (lbl.includes('|')) {
+      const [en, ur] = lbl.split('|').map(p => p.trim());
+      return { en: en.replace(/^\d+\s*-\s*/, ''), ur };
+    }
+    return { en: lbl.replace(/^\d+\s*-\s*/, ''), ur: '' };
+  };
+
+  const minAnchor = parseAnchor(sortedOptions[0]?.label || '');
+  const maxAnchor = parseAnchor(sortedOptions[sortedOptions.length - 1]?.label || '');
+
   return (
-    <div className="py-8 px-4 select-none">
-      <div 
+    <div className="py-4 px-4 select-none">
+      <div
         ref={sliderRef}
-        className="relative h-2 bg-zinc-200 rounded-full cursor-pointer mb-12"
+        className="relative h-2 bg-zinc-200 rounded-full cursor-pointer mb-10"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
         {/* Track highlight */}
-        <div 
+        <div
           className="absolute h-full bg-zinc-700 rounded-full transition-all duration-75"
           style={{ width: `${percentage}%` }}
         />
-        
+
         {/* Handle */}
-        <div 
+        <div
           className={`absolute top-1/2 -translate-y-1/2 -ml-3 w-6 h-6 bg-zinc-700 rounded-full shadow-lg transition-transform duration-75 ${isDragging ? 'scale-125' : ''}`}
           style={{ left: `${percentage}%` }}
         >
           {isDragging && (
              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-xs font-medium py-1 px-2.5 rounded-md whitespace-nowrap">
-                VAL: {value ?? min}
+                {value ?? min}
              </div>
           )}
         </div>
+      </div>
 
-        {/* Labels at extremes */}
-        <div className="absolute top-6 w-full flex justify-between text-xs text-zinc-500 font-medium">
-          <span>{(() => {
-            const lbl = sortedOptions[0]?.label || '';
-            if (lbl.includes('|')) {
-              const parts = lbl.split('|').map(p => p.trim());
-              return i18n.language === 'ur' ? parts[1] : parts[0];
-            }
-            return lbl;
-          })()} [{min}]</span>
-          <span>{(() => {
-            const lbl = sortedOptions[sortedOptions.length - 1]?.label || '';
-            if (lbl.includes('|')) {
-              const parts = lbl.split('|').map(p => p.trim());
-              return i18n.language === 'ur' ? parts[1] : parts[0];
-            }
-            return lbl;
-          })()} [{max}]</span>
+      {/* Anchor labels above 0 and max */}
+      <div className="flex justify-between px-1 mb-1.5 pointer-events-none">
+        <div className="flex flex-col items-start max-w-[42%]">
+          <span className="text-[11px] font-semibold text-zinc-600 leading-tight">{minAnchor.en}</span>
+          {minAnchor.ur && <span className="text-[11px] font-medium text-zinc-400 font-urdu leading-tight" dir="rtl">{minAnchor.ur}</span>}
+        </div>
+        <div className="flex flex-col items-end max-w-[42%] text-right">
+          <span className="text-[11px] font-semibold text-zinc-600 leading-tight">{maxAnchor.en}</span>
+          {maxAnchor.ur && <span className="text-[11px] font-medium text-zinc-400 font-urdu leading-tight" dir="rtl">{maxAnchor.ur}</span>}
         </div>
       </div>
 
@@ -123,15 +124,12 @@ const LikertSlider: React.FC<LikertSliderProps> = ({ options, value, onChange })
             key={opt.id}
             onClick={() => onChange(opt.numeric_value)}
             className={`flex-1 flex flex-col items-center py-3 border rounded-lg transition-all duration-200 ${
-              value === opt.numeric_value 
-                ? 'bg-zinc-800 border-zinc-700 text-white shadow-md -translate-y-0.5' 
+              value === opt.numeric_value
+                ? 'bg-zinc-800 border-zinc-700 text-white shadow-md -translate-y-0.5'
                 : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:shadow-sm'
             }`}
           >
             <span className="text-lg font-bold">{opt.numeric_value}</span>
-            <span className="text-[8px] uppercase font-medium tracking-wider mt-0.5">
-                {value === opt.numeric_value ? 'Active' : ''}
-            </span>
           </button>
         ))}
       </div>

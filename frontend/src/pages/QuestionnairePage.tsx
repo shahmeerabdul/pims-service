@@ -14,14 +14,6 @@ import {
   Save
 } from 'lucide-react';
 
-const SCALE_NAMES: Record<string, string> = {
-  'PERMA': 'PERMA Profiler',
-  'PHQ-9': 'Depression Severity (PHQ-9)',
-  'GAD-7': 'Anxiety Severity (GAD-7)',
-  'PANAS': 'Positive and Negative Affect (PANAS)',
-  'Gratitude': 'Gratitude Scale',
-  'SIDAS': 'Suicidal Ideation (SIDAS)',
-};
 
 const getNumericValueForResponse = (question: any, responseValue: any): number | undefined => {
   if (responseValue === undefined || responseValue === null) return undefined;
@@ -48,6 +40,10 @@ const QuestionnairePage: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [transitioning, setTransitioning] = useState(false);
+  const submittingRef = useRef(false);
+  const transitioningRef = useRef(false);
+
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,6 +64,16 @@ const QuestionnairePage: React.FC = () => {
   useEffect(() => {
     const initSession = async () => {
       if (!id) return;
+      
+      // Reset questionnaire states to prevent UI flickering or carrying over responses
+      setCompleted(false);
+      setError(null);
+      setResponses({});
+      setCurrentIndex(0);
+      setQuestionnaire(null);
+      setResponseSetId(null);
+      setLoading(true);
+
       try {
         const queryParams = new URLSearchParams(window.location.search);
         const milestone = queryParams.get('milestone') || undefined;
@@ -82,10 +88,43 @@ const QuestionnairePage: React.FC = () => {
         // Restore previous draft responses if they exist
         if (rsRes.data.responses && Array.isArray(rsRes.data.responses)) {
           const restored: Record<string, any> = {};
+          const qs = qRes.data.questions || [];
           rsRes.data.responses.forEach((r: any) => {
-            restored[r.question] = r.selected_option || r.text_value;
+            const questionObj = qs.find((q: any) => q.id === r.question);
+            if (questionObj && questionObj.type === 'SCALE') {
+              const selectedOpt = questionObj.options?.find((o: any) => o.id === r.selected_option);
+              if (selectedOpt) {
+                restored[r.question] = selectedOpt.numeric_value;
+              } else {
+                restored[r.question] = r.selected_option;
+              }
+            } else {
+              restored[r.question] = r.selected_option || r.text_value;
+            }
           });
           setResponses(restored);
+
+          // Auto-advance to the last scale group that has at least one saved answer,
+          // so the user is dropped back at the right place without having to click Next.
+          const groups: { name: string; questions: any[] }[] = [];
+          const groupMap: Record<string, any[]> = {};
+          qs.forEach((q: any) => {
+            const match = q.content.match(/^\[(.*?)\]/);
+            const scale = match ? match[1] : 'General';
+            if (!groupMap[scale]) {
+              groupMap[scale] = [];
+              groups.push({ name: scale, questions: groupMap[scale] });
+            }
+            groupMap[scale].push(q);
+          });
+          let resumeIndex = 0;
+          for (let i = 0; i < groups.length; i++) {
+            const groupHasAnswer = groups[i].questions.some(
+              (q: any) => restored[q.id] !== undefined && restored[q.id] !== null && restored[q.id] !== ''
+            );
+            if (groupHasAnswer) resumeIndex = i;
+          }
+          setCurrentIndex(resumeIndex);
         }
       } catch (err: any) {
         const detail = err.response?.data?.detail;
@@ -154,6 +193,57 @@ const QuestionnairePage: React.FC = () => {
     });
   }, [currentScaleGroup, responses]);
 
+  /**
+   * Build a save payload that only includes questions that have been answered.
+   * This is critical: the backend does delete+bulk_create on every save, so sending
+   * null for unanswered questions would wipe out previously-saved answers.
+   */
+  const buildAnsweredPayload = (currentResponses: Record<string, any>) => {
+    return questions
+      .filter((q: any) => {
+        const val = currentResponses[q.id];
+        return val !== undefined && val !== null && val !== '';
+      })
+      .map((q: any) => {
+        const response = currentResponses[q.id];
+        const base = { question_id: q.id };
+        if (q.type === 'TEXT') {
+          return { ...base, text_value: String(response) };
+        } else if (q.type === 'SCALE') {
+          const selectedOpt = q.options.find((o: any) => o.numeric_value === response);
+          return { ...base, selected_option_id: selectedOpt?.id || null };
+        } else if (q.type === 'CHOICE') {
+          return { ...base, selected_option_id: response || null };
+        }
+        return base;
+      });
+  };
+
+  /**
+   * Immediately flush all answered responses to the server (no debounce).
+   * Called explicitly on Next click to guarantee current-scale answers are
+   * persisted before the user advances, even if no answer was changed.
+   */
+  const saveDraftNow = async (currentResponses: Record<string, any>) => {
+    if (!responseSetId) return;
+    // Cancel any pending debounced save — this one supersedes it.
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const payload = buildAnsweredPayload(currentResponses);
+    if (payload.length === 0) return;
+    setIsSaving(true);
+    try {
+      await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
+      setLastSaved(new Date());
+    } catch (err) {
+      console.error('Failed to flush draft:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleResponseChange = (questionId: string, value: any) => {
     let newResponses = {
       ...responses,
@@ -179,33 +269,19 @@ const QuestionnairePage: React.FC = () => {
 
     setResponses(newResponses);
 
+    // Debounced autosave — only sends answered questions.
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-
     setIsSaving(true);
     saveTimeoutRef.current = setTimeout(async () => {
       if (!responseSetId) return;
       try {
-        const payload = questions.map((q: any) => {
-          const response = newResponses[q.id];
-          const base = { question_id: q.id };
-
-          if (q.type === 'TEXT') {
-            return { ...base, text_value: response || "" };
-          } else if (q.type === 'SCALE' || q.type === 'CHOICE') {
-            if (q.type === 'SCALE') {
-              const selectedOpt = q.options.find((o: any) => o.numeric_value === response);
-              return { ...base, selected_option_id: selectedOpt?.id || null };
-            } else {
-              return { ...base, selected_option_id: response || null };
-            }
-          }
-          return base;
-        });
-
-        await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
-        setLastSaved(new Date());
+        const payload = buildAnsweredPayload(newResponses);
+        if (payload.length > 0) {
+          await questionnairesApi.saveDraftResponseSet(responseSetId, payload);
+          setLastSaved(new Date());
+        }
       } catch (err) {
         console.error('Failed to auto-save:', err);
       } finally {
@@ -215,9 +291,9 @@ const QuestionnairePage: React.FC = () => {
   };
 
   const checkSuicideRiskLocal = (): boolean => {
-    // 1. PHQ-9 Item 9 >= 1
-    const phq9Item9Q = questions.find((q: any) => 
-      q.order === 32 || 
+    // 1. PHQ-9 Item 9 >= 1  (order 33 after header insertion)
+    const phq9Item9Q = questions.find((q: any) =>
+      q.order === 33 ||
       (q.content.includes('[PHQ-9]') && q.content.toLowerCase().includes('dead'))
     );
     if (phq9Item9Q) {
@@ -227,8 +303,8 @@ const QuestionnairePage: React.FC = () => {
       }
     }
 
-    // 2. SIDAS Item 3 > 0
-    const sidasItem3Q = questions.find((q: any) => q.order === 77);
+    // 2. SIDAS Item 3 > 0  (order 80 after header insertion)
+    const sidasItem3Q = questions.find((q: any) => q.order === 80);
     if (sidasItem3Q) {
       const val = getNumericValueForResponse(sidasItem3Q, responses[sidasItem3Q.id]);
       if (val !== undefined && val > 0) {
@@ -236,12 +312,12 @@ const QuestionnairePage: React.FC = () => {
       }
     }
 
-    // 3. SIDAS Total >= 21
-    const sidasQ1 = questions.find((q: any) => q.order === 75);
-    const sidasQ2 = questions.find((q: any) => q.order === 76);
-    const sidasQ3 = questions.find((q: any) => q.order === 77);
-    const sidasQ4 = questions.find((q: any) => q.order === 78);
-    const sidasQ5 = questions.find((q: any) => q.order === 79);
+    // 3. SIDAS Total >= 21  (orders 78-82 after header insertion)
+    const sidasQ1 = questions.find((q: any) => q.order === 78);
+    const sidasQ2 = questions.find((q: any) => q.order === 79);
+    const sidasQ3 = questions.find((q: any) => q.order === 80);
+    const sidasQ4 = questions.find((q: any) => q.order === 81);
+    const sidasQ5 = questions.find((q: any) => q.order === 82);
 
     if (sidasQ1) {
       const val1 = getNumericValueForResponse(sidasQ1, responses[sidasQ1.id]);
@@ -272,6 +348,7 @@ const QuestionnairePage: React.FC = () => {
   };
 
   const handleNext = () => {
+    if (transitioningRef.current || submittingRef.current) return;
     if (checkSuicideRiskLocal() && !hasShownSafetyPanel) {
       setHasShownSafetyPanel(true);
       setSafetyPanelPendingAction('next');
@@ -281,16 +358,31 @@ const QuestionnairePage: React.FC = () => {
     proceedNext();
   };
 
-  const proceedNext = () => {
+  const proceedNext = async () => {
+    if (transitioningRef.current || submittingRef.current) return;
     if (currentIndex < scaleGroups.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      transitioningRef.current = true;
+      setTransitioning(true);
+      try {
+        // Flush all answered responses to the server before advancing.
+        // This guarantees the current scale's answers are persisted even
+        // if no answer was changed (so the debounced autosave didn't fire).
+        await saveDraftNow(responses);
+        setCurrentIndex(prev => prev + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        console.error('Failed to save draft and transition:', err);
+      } finally {
+        transitioningRef.current = false;
+        setTransitioning(false);
+      }
     } else {
       submitAll();
     }
   };
 
   const handleBack = () => {
+    if (transitioningRef.current || submittingRef.current) return;
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -394,7 +486,8 @@ const QuestionnairePage: React.FC = () => {
   };
 
   const submitAll = async (overrideResponses?: Record<string, any>) => {
-    if (!responseSetId) return;
+    if (!responseSetId || submittingRef.current || transitioningRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     const finalState = overrideResponses || responses;
     
@@ -416,7 +509,12 @@ const QuestionnairePage: React.FC = () => {
         return base;
       });
 
-      const res = await questionnairesApi.submitResponseSet(responseSetId, payload);
+      // Introduce a minimum delay of 1.5 seconds to let the server transaction settle and show a premium loading experience
+      const isTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+      const [res] = await Promise.all([
+        questionnairesApi.submitResponseSet(responseSetId, payload),
+        new Promise(resolve => setTimeout(resolve, isTest ? 0 : 1500))
+      ]);
       
       const isSuicideTriggered = res.data?.suicide_risk_triggered;
       if (isSuicideTriggered && !hasShownSafetyPanel) {
@@ -430,6 +528,7 @@ const QuestionnairePage: React.FC = () => {
     } catch (err: any) {
       setError('Failed to submit questionnaire. Please try again.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -499,6 +598,7 @@ const QuestionnairePage: React.FC = () => {
           questions={questions}
           responseSetId={responseSetId!}
           initialResponses={responses}
+          submitting={submitting || transitioning}
           onComplete={(finalResponses) => {
             setResponses(finalResponses);
             submitAll(finalResponses);
@@ -518,9 +618,6 @@ const QuestionnairePage: React.FC = () => {
     }
     return { english: cleanContent, urdu: '' };
   };
-
-  const currentScaleName = currentScaleGroup.name;
-  const currentScaleTitle = SCALE_NAMES[currentScaleName] || `${currentScaleName} Scale`;
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-4">
@@ -548,7 +645,6 @@ const QuestionnairePage: React.FC = () => {
       <div className="mb-16 space-y-6">
         <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.3em]">
           <span className="text-zinc-400 text-xs font-medium">Scale {currentIndex + 1} / {scaleGroups.length}</span>
-          <span className="text-zinc-700 text-xs font-semibold">{currentScaleTitle}</span>
         </div>
         <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
           <motion.div
@@ -570,6 +666,31 @@ const QuestionnairePage: React.FC = () => {
           className="space-y-12"
         >
           <div className="space-y-8">
+            {/* Gratitude Response Key — stem + bilingual legend (no separate TEXT header in DB) */}
+            {currentScaleGroup.name === 'Gratitude' && (
+              <div className="border border-zinc-200 rounded-xl p-5 md:p-6 bg-zinc-50/80 shadow-sm space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-3 border-b border-zinc-200">
+                  <p className="text-sm font-medium text-zinc-700 leading-relaxed">Please indicate how strongly you agree with each statement.</p>
+                  <p className="text-sm font-medium text-zinc-700 leading-relaxed font-urdu text-right" dir="rtl">براہ کرم نشاندہی کیجیے کہ آپ ہر بیان سے کس حد تک متفق ہیں۔</p>
+                </div>
+                <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Response Key / جوابات کی کنجی</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {[
+                    { val: 0, en: 'Completely disagree', ur: 'بالکل غیر متفق' },
+                    { val: 1, en: 'Disagree', ur: 'غیر متفق' },
+                    { val: 2, en: 'Neutral', ur: 'غیر جانبدار' },
+                    { val: 3, en: 'Agree', ur: 'متفق' },
+                    { val: 4, en: 'Completely agree', ur: 'مکمل متفق' },
+                  ].map((anchor) => (
+                    <div key={anchor.val} className="flex flex-col items-center text-center border border-zinc-200 rounded-lg bg-white px-2 py-3 gap-1">
+                      <span className="text-lg font-bold text-zinc-700">{anchor.val}</span>
+                      <span className="text-[11px] font-medium text-zinc-600 leading-tight">{anchor.en}</span>
+                      <span className="text-[11px] font-medium text-zinc-500 font-urdu leading-tight" dir="rtl">{anchor.ur}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {currentScaleGroup.questions.map((question: any, idx: number) => {
               if (currentScaleGroup.name === 'SIDAS' && idx > 0) {
                 const firstSidasQ = currentScaleGroup.questions[0];
@@ -577,18 +698,91 @@ const QuestionnairePage: React.FC = () => {
                   return null;
                 }
               }
+
               const { english, urdu } = splitQuestionContent(question.content);
+
+              // Non-required TEXT questions are section headers / instructions.
+              // Render stem banner first, then the response key directly below it
+              // so the one-liner always sits above the key (not the other way around).
+              if (question.type === 'TEXT' && !question.required) {
+                const isPhqGad = currentScaleGroup.name === 'PHQ-9' || currentScaleGroup.name === 'GAD-7';
+                const isPanas = currentScaleGroup.name === 'PANAS';
+                return (
+                  <React.Fragment key={question.id}>
+                    <div className="border border-zinc-200 rounded-xl p-5 md:p-6 bg-gradient-to-br from-zinc-50 to-white shadow-sm">
+                      {urdu ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                          <div className="text-left">
+                            <p className="text-sm md:text-base font-medium text-zinc-700 leading-relaxed">{english}</p>
+                          </div>
+                          <div className="text-right" dir="rtl">
+                            <p className="text-sm md:text-base font-medium text-zinc-700 leading-relaxed font-urdu">{urdu}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm md:text-base font-medium text-zinc-700 leading-relaxed">{english}</p>
+                      )}
+                    </div>
+                    {isPhqGad && (
+                      <div className="border border-zinc-200 rounded-xl p-5 md:p-6 bg-zinc-50/80 shadow-sm">
+                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Response Key / جوابات کی کنجی</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { val: 0, en: 'Not at all', ur: 'بالکل نہیں' },
+                            { val: 1, en: 'Several days', ur: 'کئی دن' },
+                            { val: 2, en: 'More than half the days', ur: 'ایک ہفتے سے زیادہ' },
+                            { val: 3, en: 'Nearly every day', ur: 'تقریباً روزانہ' },
+                          ].map((anchor) => (
+                            <div key={anchor.val} className="flex flex-col items-center text-center border border-zinc-200 rounded-lg bg-white px-2 py-3 gap-1">
+                              <span className="text-lg font-bold text-zinc-700">{anchor.val}</span>
+                              <span className="text-[11px] font-medium text-zinc-600 leading-tight">{anchor.en}</span>
+                              <span className="text-[11px] font-medium text-zinc-500 font-urdu leading-tight" dir="rtl">{anchor.ur}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {isPanas && (
+                      <div className="border border-zinc-200 rounded-xl p-5 md:p-6 bg-zinc-50/80 shadow-sm">
+                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Response Key / جوابات کی کنجی</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                          {[
+                            { val: 0, en: 'Very slightly or not at all', ur: 'کبھی نہیں' },
+                            { val: 1, en: 'A little', ur: 'بہت کم' },
+                            { val: 2, en: 'Moderately', ur: 'درمیانہ' },
+                            { val: 3, en: 'Quite a bit', ur: 'کافی حد تک' },
+                            { val: 4, en: 'Extremely', ur: 'بہت زیادہ' },
+                          ].map((anchor) => (
+                            <div key={anchor.val} className="flex flex-col items-center text-center border border-zinc-200 rounded-lg bg-white px-2 py-3 gap-1">
+                              <span className="text-lg font-bold text-zinc-700">{anchor.val}</span>
+                              <span className="text-[11px] font-medium text-zinc-600 leading-tight">{anchor.en}</span>
+                              <span className="text-[11px] font-medium text-zinc-500 font-urdu leading-tight" dir="rtl">{anchor.ur}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              }
+
+              // Count only scorable questions (skip non-required TEXT headers) for the counter
+              const scorableQuestions = currentScaleGroup.questions.filter(
+                (q: any) => !(q.type === 'TEXT' && !q.required)
+              );
+              const scorableIdx = scorableQuestions.indexOf(question);
+
               return (
                 <div key={question.id} className="border border-zinc-200 rounded-xl p-6 md:p-8 bg-white shadow-sm space-y-6">
                   <div className="flex justify-between items-center pb-4 border-b border-zinc-100">
-                    <span className="text-xs font-medium text-zinc-400">Question {idx + 1} of {currentScaleGroup.questions.length}</span>
+                    <span className="text-xs font-medium text-zinc-400">Question {scorableIdx + 1} of {scorableQuestions.length}</span>
                     {question.required && <span className="text-xs font-semibold text-zinc-400">* Required</span>}
                   </div>
                   
                   {/* Bilingual Question Text or Single Language Fallback */}
                   {urdu ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start mb-4">
-                      <div className="text-left">
+                      <div className="text-left font-latin">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">English</span>
                         <p className="text-base md:text-lg font-medium text-zinc-800 leading-relaxed">{english}</p>
                       </div>
@@ -598,7 +792,7 @@ const QuestionnairePage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-left mb-4">
+                    <div className="text-left mb-4 font-latin">
                       <p className="text-base md:text-lg font-medium text-zinc-800 leading-relaxed">{english}</p>
                     </div>
                   )}
@@ -650,7 +844,7 @@ const QuestionnairePage: React.FC = () => {
           <div className="pt-8 border-t border-zinc-200 flex justify-between items-center">
             <button
               onClick={handleBack}
-              disabled={currentIndex === 0}
+              disabled={currentIndex === 0 || transitioning || submitting}
               className="flex items-center gap-2 text-zinc-400 hover:text-zinc-700 disabled:opacity-0 transition-all font-medium text-sm"
             >
               <ArrowLeft className="w-4 h-4" /> Previous
@@ -658,10 +852,10 @@ const QuestionnairePage: React.FC = () => {
 
             <button
               onClick={handleNext}
-              disabled={submitting || !isScaleGroupCompleted}
+              disabled={submitting || transitioning || !isScaleGroupCompleted}
               className="px-8 py-3 bg-zinc-800 text-white font-medium rounded-lg text-sm hover:bg-zinc-700 transition-colors min-w-[140px] flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {submitting ? (
+              {submitting || transitioning ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>

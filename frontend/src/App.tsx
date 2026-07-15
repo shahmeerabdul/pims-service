@@ -7,7 +7,9 @@ import LoadingSpinner from './components/Common/LoadingSpinner';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+
 const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const GroupsManagementPage = lazy(() => import('./pages/GroupsManagementPage'));
@@ -42,7 +44,7 @@ const App: React.FC = () => {
             <Routes>
               <Route
                 path="/"
-                element={<div className="container mx-auto px-4 py-8 flex-grow">{checkAuth() ? (isAdminUser() ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />) : <LandingPage />}</div>}
+                element={<LandingPage />}
               />
 
               {/* Guest Only Routes */}
@@ -54,6 +56,11 @@ const App: React.FC = () => {
                 path="/register"
                 element={<div className="container mx-auto px-4 py-8 flex-grow">{checkAuth() ? (isAdminUser() ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : <RegisterPage />}</div>}
               />
+              <Route
+                path="/forgot-password"
+                element={<div className="container mx-auto px-4 py-8 flex-grow">{checkAuth() ? (isAdminUser() ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : <ForgotPasswordPage />}</div>}
+              />
+
 
               {/* Participant Routes - Wrapped in Container */}
               <Route element={<div className="container mx-auto px-4 py-8 flex-grow"><AuthOnboardingGuard><Outlet /></AuthOnboardingGuard></div>}>
@@ -64,21 +71,21 @@ const App: React.FC = () => {
                 <Route path="/questionnaire/:id" element={<QuestionnairePage />} />
                 <Route path="/sociodemographic" element={<SociodemographicRedirect />} />
               </Route>
-              
+
               {/* Admin Hub - Nested Routes with Sidebar Layout */}
               <Route element={<AuthOnboardingGuard requireAdmin={true}><AdminLayout /></AuthOnboardingGuard>}>
-                  <Route path="/admin" element={<AdminDashboardPage />} />
-                  <Route path="/admin/groups" element={<GroupsManagementPage />} />
-                  <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
-                 <Route path="/admin/t0-data" element={<AdminT0ResultsPage />} />
-                 <Route path="/admin/t1-data" element={<AdminT1ResultsPage />} />
-                 <Route path="/admin/t-first-month-data" element={<AdminTFirstMonthResultsPage />} />
-                 <Route path="/admin/t2-data" element={<AdminT2ResultsPage />} />
-                 <Route path="/admin/t3-data" element={<AdminT3ResultsPage />} />
-                 <Route path="/admin/t4-data" element={<AdminT4ResultsPage />} />
-                 <Route path="/admin/support-queries" element={<AdminSupportQueriesPage />} />
-                 <Route path="/admin/follow-ups" element={<AdminFollowUpsPage />} />
-                 <Route path="/admin/safety-risk" element={<AdminSuicideRiskPage />} />
+                <Route path="/admin" element={<AdminDashboardPage />} />
+                <Route path="/admin/groups" element={<GroupsManagementPage />} />
+                <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
+                <Route path="/admin/t0-data" element={<AdminT0ResultsPage />} />
+                <Route path="/admin/t1-data" element={<AdminT1ResultsPage />} />
+                <Route path="/admin/t-first-month-data" element={<AdminTFirstMonthResultsPage />} />
+                <Route path="/admin/t2-data" element={<AdminT2ResultsPage />} />
+                <Route path="/admin/t3-data" element={<AdminT3ResultsPage />} />
+                <Route path="/admin/t4-data" element={<AdminT4ResultsPage />} />
+                <Route path="/admin/support-queries" element={<AdminSupportQueriesPage />} />
+                <Route path="/admin/follow-ups" element={<AdminFollowUpsPage />} />
+                <Route path="/admin/safety-risk" element={<AdminSuicideRiskPage />} />
               </Route>
 
               {/* Fallback */}

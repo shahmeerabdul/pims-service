@@ -4,8 +4,18 @@ from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from .export_utils import sanitize_csv_cell
 from .models import ExportTask
-from .tasks import generate_posttest_export_csv, generate_longitudinal_export_csv, generate_t1_export_csv, generate_t_first_month_export_csv, generate_t2_export_csv, generate_t3_export_csv, generate_t4_export_csv
+from .tasks import (
+    generate_posttest_export_csv,
+    generate_longitudinal_export_csv,
+    generate_t1_export_csv,
+    generate_t_first_month_export_csv,
+    generate_t2_export_csv,
+    generate_t3_export_csv,
+    generate_t4_export_csv,
+    generate_daily_entries_export_csv
+)
 from .serializers import ExportTaskSerializer
 from users.models import User
 from activities.models import Submission
@@ -32,7 +42,7 @@ class ExportDataCSVView(APIView):
                 sub.user.group.name if sub.user.group else 'None',
                 sub.user.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 sub.activity.title,
-                sub.content.replace('\n', ' '), # SPSS friendly: no newlines in text fields
+                sanitize_csv_cell(sub.content.replace('\n', ' ')),
                 sub.submission_date.strftime('%Y-%m-%d %H:%M:%S')
             ])
 
@@ -180,6 +190,30 @@ class ExportLongitudinalDataCSVView(APIView):
         except Exception as e:
             logger.error(f"Failed to trigger longitudinal export: {e}")
             return Response({"detail": "Failed to initiate export process."}, status=500)
+
+
+class ExportDailyEntriesDataCSVView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        try:
+            group_name = request.data.get('group', 'All')
+            wave_name = request.data.get('wave', 'All')
+            task = ExportTask.objects.create(
+                user=request.user,
+                filters={'group': group_name, 'wave': wave_name}
+            )
+            
+            generate_daily_entries_export_csv.delay(task.id)
+            
+            return Response({
+                'task_id': task.id,
+                'status': task.status
+            }, status=202)
+        except Exception as e:
+            logger.error(f"Failed to trigger daily entries export: {e}")
+            return Response({"detail": "Failed to initiate export process."}, status=500)
+
 
 class ExportTaskStatusView(APIView):
     permission_classes = [IsAdminUser]

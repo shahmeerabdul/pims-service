@@ -184,3 +184,160 @@ def test_participant_cannot_access_follow_ups(auth_client):
     response = auth_client.get('/api/support/tickets/follow_ups/')
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
+
+@pytest.mark.django_db
+def test_admin_can_filter_follow_ups(admin_client, participant_user):
+    # Create tickets with different statuses
+    SupportTicket.objects.create(
+        user=participant_user,
+        subject='Call Protocol: Task 1',
+        message='Msg1',
+        status='Open'
+    )
+    SupportTicket.objects.create(
+        user=participant_user,
+        subject='Call Protocol: Task 2',
+        message='Msg2',
+        status='In Progress'
+    )
+    SupportTicket.objects.create(
+        user=participant_user,
+        subject='Call Protocol: Task 3',
+        message='Msg3',
+        status='Resolved'
+    )
+
+    # Filter: Open
+    res_open = admin_client.get('/api/support/tickets/follow_ups/?status=Open')
+    assert res_open.status_code == status.HTTP_200_OK
+    data = res_open.json()
+    results = data.get('results', data) if isinstance(data, dict) else data
+    assert len(results) == 1
+    assert results[0]['subject'] == 'Call Protocol: Task 1'
+
+    # Filter: In Progress
+    res_ip = admin_client.get('/api/support/tickets/follow_ups/?status=in_progress')
+    assert res_ip.status_code == status.HTTP_200_OK
+    data = res_ip.json()
+    results = data.get('results', data) if isinstance(data, dict) else data
+    assert len(results) == 1
+    assert results[0]['subject'] == 'Call Protocol: Task 2'
+
+    # Filter: Resolved
+    res_res = admin_client.get('/api/support/tickets/follow_ups/?status=resolved')
+    assert res_res.status_code == status.HTTP_200_OK
+    data = res_res.json()
+    results = data.get('results', data) if isinstance(data, dict) else data
+    assert len(results) == 1
+    assert results[0]['subject'] == 'Call Protocol: Task 3'
+
+
+from django.core import mail
+from django.conf import settings
+
+@pytest.mark.django_db(transaction=True)
+def test_support_ticket_creation_sends_emails(participant_user):
+    mail.outbox.clear()
+    
+    # 1. Create a support ticket
+    ticket = SupportTicket.objects.create(
+        user=participant_user,
+        subject="Login Issues",
+        message="I cannot login to my account."
+    )
+    
+    # 2. Check emails sent (1 to participant, 1 to admin)
+    assert len(mail.outbox) == 2
+    
+    # Participant confirmation email
+    participant_email = next(m for m in mail.outbox if participant_user.email in m.to)
+    assert "We have received your support request" in participant_email.subject
+    assert "ہمیں آپ کی مدد کی درخواست موصول ہو گئی ہے" in participant_email.subject
+    assert ticket.ticket_number in participant_email.subject
+    assert "Login Issues" in participant_email.body
+    
+    # Admin alert email
+    admin_email = next(m for m in mail.outbox if settings.SUPPORT_ADMIN_EMAIL in m.to)
+    assert f"New Support Ticket Raised: {ticket.ticket_number}" in admin_email.subject
+    assert ticket.message in admin_email.body
+    assert participant_user.email in admin_email.body
+
+
+@pytest.mark.django_db(transaction=True)
+def test_call_protocol_creation_skips_emails(participant_user):
+    mail.outbox.clear()
+    
+    # Create Call Protocol ticket
+    SupportTicket.objects.create(
+        user=participant_user,
+        subject="Call Protocol: High daily activity miss",
+        message="Engagement check required."
+    )
+    
+    # Should not trigger any emails
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_support_ticket_update_sends_emails(participant_user):
+    # Setup: Create ticket first
+    ticket = SupportTicket.objects.create(
+        user=participant_user,
+        subject="General Query",
+        message="Hello team"
+    )
+    mail.outbox.clear()
+    
+    # 1. Update status
+    ticket.status = "In Progress"
+    ticket.save()
+    
+    assert len(mail.outbox) == 1
+    msg = mail.outbox[0]
+    assert msg.to == [participant_user.email]
+    assert "Support Ticket Update" in msg.subject
+    assert "سائیکیورسٹی سپورٹ ٹکٹ کی معلومات" in msg.subject
+    assert "In Progress" in msg.body
+    assert "کام جاری ہے" in msg.body
+    assert "View Support Tickets" in msg.body
+    assert "support=true" in msg.body
+
+
+@pytest.mark.django_db(transaction=True)
+def test_support_ticket_update_reply_sends_emails(participant_user):
+    ticket = SupportTicket.objects.create(
+        user=participant_user,
+        subject="General Query",
+        message="Hello team"
+    )
+    mail.outbox.clear()
+    
+    # 2. Update status and reply
+    ticket.status = "Resolved"
+    ticket.admin_reply = "We have resolved this issue. Try again now!"
+    ticket.save()
+    
+    assert len(mail.outbox) == 1
+    msg = mail.outbox[0]
+    assert msg.to == [participant_user.email]
+    assert "Resolved" in msg.body
+    assert "We have resolved this issue" in msg.body
+
+
+@pytest.mark.django_db(transaction=True)
+def test_support_ticket_update_internal_notes_skips_emails(participant_user):
+    ticket = SupportTicket.objects.create(
+        user=participant_user,
+        subject="General Query",
+        message="Hello team"
+    )
+    mail.outbox.clear()
+    
+    # Update internal admin_notes only
+    ticket.admin_notes = "Internal notes that participant should not see"
+    ticket.save()
+    
+    # Should not send any email updates to the participant
+    assert len(mail.outbox) == 0
+
+

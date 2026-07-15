@@ -4,12 +4,27 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ActivityPage from '../pages/ActivityPage';
 import api from '../services/api';
 
-// Mock the API service
+const { mockNavigate, mockQuestionnairesApi } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockQuestionnairesApi: {
+    list: vi.fn(),
+  },
+}));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual as any,
+    useNavigate: () => mockNavigate,
+  };
+});
+
 vi.mock('../services/api', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
-  }
+  },
+  questionnairesApi: mockQuestionnairesApi,
 }));
 
 // Mock react-i18next with dynamic language capability
@@ -117,9 +132,9 @@ describe('ActivityPage', () => {
 
     await waitFor(() => {
       // Entry labels in Urdu
-      expect(screen.getByText('اندراج 1: مثبت تعلقات')).toBeInTheDocument();
-      expect(screen.getByText('اندراج 2: کامیابی')).toBeInTheDocument();
-      expect(screen.getByText('اندراج 3: لطف')).toBeInTheDocument();
+      expect(screen.getByText('اندراج ۱: مثبت تعلقات')).toBeInTheDocument();
+      expect(screen.getByText('اندراج ۲: کامیابی')).toBeInTheDocument();
+      expect(screen.getByText('اندراج ۳: لطف')).toBeInTheDocument();
 
       // Definitions - Urdu
       expect(screen.getByText('آج کسی دوسرے فرد کے ساتھ کوئی بامقصد ملاقات یا رابطہ۔')).toBeInTheDocument();
@@ -128,7 +143,7 @@ describe('ActivityPage', () => {
     });
   });
 
-  it('performs word counting and enforces limits (20 - 200 words)', async () => {
+  it('performs word counting and enforces limits (10 - 200 words)', async () => {
     const mockActivity = {
       id: 12,
       title: 'Structured Reflection',
@@ -153,14 +168,14 @@ describe('ActivityPage', () => {
     const submitBtn = screen.queryByRole('button', { name: /Submit Activity/i });
     expect(submitBtn).toBeDisabled();
 
-    // 1. Text is less than 20 words
+    // 1. Text is less than 10 words
     fireEvent.change(textareas[0], { target: { value: 'This is short' } });
-    expect(screen.getByText('Minimum 20 words required.')).toBeInTheDocument();
+    expect(screen.getByText('Minimum 10 words required.')).toBeInTheDocument();
 
-    // 2. Text is exactly 20 words
-    const validText = Array(20).fill('word').join(' ');
+    // 2. Text is exactly 10 words
+    const validText = Array(10).fill('word').join(' ');
     fireEvent.change(textareas[0], { target: { value: validText } });
-    expect(screen.queryByText('Minimum 20 words required.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Minimum 10 words required.')).not.toBeInTheDocument();
 
     // 3. Text is close to 200 words (warning zone)
     const warningText = Array(185).fill('word').join(' ');
@@ -214,13 +229,23 @@ describe('ActivityPage', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(api.post).toHaveBeenCalledWith('/activities/daily/submit/', {
+      expect(api.post).toHaveBeenCalledWith('/activities/daily/submit/', expect.objectContaining({
         activity: 12,
         entry_1: validText,
         entry_2: validText,
         entry_3: validText,
-      });
-    });
+        entry_1_duration_sec: 0,
+        entry_2_duration_sec: 0,
+        entry_3_duration_sec: 0,
+        entry_1_focus_ts: expect.any(String),
+        entry_2_focus_ts: expect.any(String),
+        entry_3_focus_ts: expect.any(String),
+        entry_1_submit_ts: expect.any(String),
+        entry_2_submit_ts: expect.any(String),
+        entry_3_submit_ts: expect.any(String),
+      }));
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    }, { timeout: 2500 });
   });
 
   it('saves draft to local storage on change and restores it on reload', async () => {
@@ -287,4 +312,105 @@ describe('ActivityPage', () => {
       expect(screen.queryByRole('button', { name: /Submit/i })).not.toBeInTheDocument();
     });
   });
+
+  it('renders Group 4 Day 1 schedule, definitions, and examples correctly in English and Urdu', async () => {
+    const mockActivity = {
+      id: 12,
+      title: 'Combined Reflection',
+      description: 'Daily prompt instruction | اردو ہدایات',
+      group_name: 'Group 4',
+      day_number: 1, // Day 1 should show Pleasure with Gratitude, Engagement with Gratitude, Meaning with Gratitude
+      submitted_today: false,
+    };
+
+    (api.get as any).mockResolvedValue({ data: mockActivity });
+
+    renderComponent();
+
+    await waitFor(() => {
+      // Entry labels
+      expect(screen.getByText('Entry 1: Pleasure with Gratitude')).toBeInTheDocument();
+      expect(screen.getByText('Entry 2: Engagement with Gratitude')).toBeInTheDocument();
+      expect(screen.getByText('Entry 3: Meaning with Gratitude')).toBeInTheDocument();
+
+      // Definitions & Examples - English
+      expect(screen.getByText('An enjoyable moment today that you feel grateful for. Describe what happened, why you are grateful for it, and what or who made it possible.')).toBeInTheDocument();
+      expect(screen.getByText(/sister made karak chai/)).toBeInTheDocument();
+
+      // Urdu translation definitions
+      expect(screen.getByText('آج کا کوئی لطف بھرا لمحہ جس کے لیے آپ شکر گزار ہیں۔ بیان کریں کہ کیا ہوا، آپ اس کے لیے کیوں شکر گزار ہیں، اور کس یا کس چیز نے اسے ممکن بنایا۔')).toBeInTheDocument();
+    });
+  });
+
+  it('auto-forwards user to active psychometric questionnaire when Day 7 activity is submitted', async () => {
+    const mockActivity = {
+      id: 12,
+      title: 'Structured Reflection',
+      description: 'Daily prompt instruction',
+      group_name: 'Group 3',
+      day_number: 7, // Day 7 submission should trigger auto-forward
+      submitted_today: false,
+    };
+
+    (api.get as any).mockImplementation((url: string) => {
+      if (url === '/activities/daily/current/') {
+        return Promise.resolve({ data: mockActivity });
+      }
+      if (url === '/users/profile/') {
+        return Promise.resolve({ data: { due_milestone: '7_DAYS' } });
+      }
+      return Promise.reject(new Error(`Unhandled GET: ${url}`));
+    });
+
+    (api.post as any).mockResolvedValue({ data: { success: true } });
+
+    // Mock active questionnaires
+    mockQuestionnairesApi.list.mockResolvedValue({
+      data: [
+        {
+          id: 'q-psych-id',
+          is_active: true,
+          assessment_type: 'PSYCHOMETRIC',
+        }
+      ]
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Entry 1: Positive Relationships')).toBeInTheDocument();
+    });
+
+    const textareas = screen.getAllByRole('textbox');
+    const validText = Array(25).fill('word').join(' ');
+
+    fireEvent.change(textareas[0], { target: { value: validText } });
+    fireEvent.change(textareas[1], { target: { value: validText } });
+    fireEvent.change(textareas[2], { target: { value: validText } });
+
+    const submitBtn = screen.getByRole('button', { name: /Submit/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/activities/daily/submit/', expect.objectContaining({
+        activity: 12,
+        entry_1: validText,
+        entry_2: validText,
+        entry_3: validText,
+        entry_1_duration_sec: 0,
+        entry_2_duration_sec: 0,
+        entry_3_duration_sec: 0,
+        entry_1_focus_ts: expect.any(String),
+        entry_2_focus_ts: expect.any(String),
+        entry_3_focus_ts: expect.any(String),
+        entry_1_submit_ts: expect.any(String),
+        entry_2_submit_ts: expect.any(String),
+        entry_3_submit_ts: expect.any(String),
+      }));
+      expect(api.get).toHaveBeenCalledWith('/users/profile/');
+      expect(mockQuestionnairesApi.list).toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/questionnaire/q-psych-id?milestone=7_DAYS', { replace: true });
+    }, { timeout: 2500 });
+  });
 });
+

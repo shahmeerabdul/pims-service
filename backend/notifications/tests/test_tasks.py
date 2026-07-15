@@ -70,26 +70,154 @@ def test_send_daily_reflection_email_personalization(test_user):
     # Assert email was sent
     assert len(mail.outbox) == 1
     sent_email = mail.outbox[0]
-    assert sent_email.subject == "PIMS Daily Activity Reminder"
+    assert "Daily Activity Reminder" in sent_email.subject
     assert sent_email.to == [test_user.email]
-    assert "Sarah Kim" in sent_email.body
-    assert "Sarah Kim" in sent_email.alternatives[0][0]
-    assert "complete your daily reflection today." in sent_email.body
-    assert "Complete Today's Reflection" in sent_email.alternatives[0][0]
+    assert "Sarah" not in sent_email.body
+    assert "Sarah" not in sent_email.alternatives[0][0]
+    assert "Start today's exercise" in sent_email.alternatives[0][0]
+    assert "آج کی مشق شروع کریں" in sent_email.alternatives[0][0]
 
-    # 2. Notification without "reflection" in message (milestone, should not send email for now)
+    # 1b. Notification with "reflection" and "evening" in message (should send evening reminder email)
     mail.outbox = []
-    notif_other = Notification.objects.create(
+    notif_evening = Notification.objects.create(
         user=test_user,
         n_type='email',
-        message='Your 7-day posttest assessment is now due.',
+        message='Good evening! You haven\'t completed your daily reflection yet. There\'s still time!',
+        scheduled_time=timezone.now(),
+        status='pending'
+    )
+    res_ev = send_notification(notif_evening.pk)
+    notif_evening.refresh_from_db()
+    assert notif_evening.status == 'sent'
+    assert len(mail.outbox) == 1
+    sent_ev_email = mail.outbox[0]
+    assert "Evening Reminder" in sent_ev_email.subject
+    assert "Evening Reminder" in sent_ev_email.alternatives[0][0]
+    assert "Complete today's exercise" in sent_ev_email.alternatives[0][0]
+    assert "آج کی مشق مکمل کریں" in sent_ev_email.alternatives[0][0]
+
+    # 1c. Notification with "reflection" and "missed" in message (should send consecutive misses email)
+    mail.outbox = []
+    notif_missed = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='We noticed you missed your reflection for a couple of days. Research shows consistency is key. Let\'s get back on track today!',
+        scheduled_time=timezone.now(),
+        status='pending'
+    )
+    res_ms = send_notification(notif_missed.pk)
+    notif_missed.refresh_from_db()
+    assert notif_missed.status == 'sent'
+    assert len(mail.outbox) == 1
+    sent_ms_email = mail.outbox[0]
+    assert "get back on track" in sent_ms_email.subject.lower()
+    assert "Back on Track" in sent_ms_email.alternatives[0][0]
+    assert "Resume your writing" in sent_ms_email.alternatives[0][0]
+    assert "اپنی تحریر دوبارہ شروع کریں" in sent_ms_email.alternatives[0][0]
+
+    # 2. Notification without "reflection" in message (milestone/assessment due, should send due email)
+    mail.outbox = []
+    notif_due = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Hello! Your 7-day post-test assessment is now due. Please complete it today!',
         scheduled_time=timezone.now(),
         status='pending'
     )
 
-    res2 = send_notification(notif_other.pk)
-    notif_other.refresh_from_db()
-    assert notif_other.status == 'sent'
+    res2 = send_notification(notif_due.pk)
+    notif_due.refresh_from_db()
+    assert notif_due.status == 'sent'
     
-    # Assert NO email was sent
+    # Assert email was sent
+    assert len(mail.outbox) == 1
+    sent_email = mail.outbox[0]
+    assert "Psycheversity Assessment Due Reminder" in sent_email.subject
+    assert "سائیکیورسٹی اسیسمنٹ کی یاد دہانی" in sent_email.subject
+    assert sent_email.to == [test_user.email]
+    assert "Sarah Kim" not in sent_email.body
+    assert "Your 7-day post-test assessment is now due." in sent_email.body
+    assert "Assessment Due Reminder" in sent_email.alternatives[0][0]
+    assert "اسیسمنٹ کی یاد دہانی" in sent_email.alternatives[0][0]
+    assert "Go to Dashboard" in sent_email.alternatives[0][0]
+    assert "ڈیش بورڈ پر جائیں" in sent_email.alternatives[0][0]
+
+    # 3. Notification without "reflection" in message (milestone/assessment overdue, should send overdue email)
+    mail.outbox = []
+    notif_overdue = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Reminder: Your 3-month follow-up assessment is overdue. Please complete it at your earliest convenience.',
+        scheduled_time=timezone.now(),
+        status='pending'
+    )
+
+    res3 = send_notification(notif_overdue.pk)
+    notif_overdue.refresh_from_db()
+    assert notif_overdue.status == 'sent'
+    
+    # Assert email was sent
+    assert len(mail.outbox) == 1
+    sent_email_od = mail.outbox[0]
+    assert "Psycheversity Assessment Overdue Reminder" in sent_email_od.subject
+    assert "سائیکیورسٹی اسیسمنٹ کے وقت گزرنے کی یاد دہانی" in sent_email_od.subject
+    assert sent_email_od.to == [test_user.email]
+    assert "Sarah Kim" not in sent_email_od.body
+    assert "Reminder: Your 3-month follow-up assessment is overdue." in sent_email_od.body
+    assert "Assessment Overdue Reminder" in sent_email_od.alternatives[0][0]
+    assert "اسیسمنٹ کے وقت گزرنے کی یاد دہانی" in sent_email_od.alternatives[0][0]
+    assert "Go to Dashboard" in sent_email_od.alternatives[0][0]
+    assert "ڈیش بورڈ پر جائیں" in sent_email_od.alternatives[0][0]
+
+
+
+@pytest.mark.django_db
+def test_send_notification_inactive_user(test_user):
+    from notifications.models import Notification
+    from notifications.tasks import send_notification
+    from django.core import mail
+
+    test_user.is_active = False
+    test_user.save()
+    mail.outbox = []
+
+    notif = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Hello',
+        scheduled_time=timezone.now(),
+        status='pending',
+    )
+
+    result = send_notification(notif.pk)
+    notif.refresh_from_db()
+    assert notif.status == 'failed'
+    assert result['status'] == 'failed'
+    assert result['reason'] == 'inactive_user'
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_send_notification_missing_email(test_user):
+    from notifications.models import Notification
+    from notifications.tasks import send_notification
+    from django.core import mail
+
+    test_user.email = ""
+    test_user.save()
+    mail.outbox = []
+
+    notif = Notification.objects.create(
+        user=test_user,
+        n_type='email',
+        message='Hello',
+        scheduled_time=timezone.now(),
+        status='pending',
+    )
+
+    result = send_notification(notif.pk)
+    notif.refresh_from_db()
+    assert notif.status == 'failed'
+    assert result['status'] == 'failed'
+    assert result['reason'] == 'missing_email'
     assert len(mail.outbox) == 0

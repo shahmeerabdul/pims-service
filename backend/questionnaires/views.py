@@ -20,6 +20,7 @@ from .serializers import (
     QuestionnaireSerializer, 
     ResponseSetSerializer, 
     AdminResponseSetSerializer,
+    AdminResponseSetListSerializer,
     ResponseSetSubmitSerializer
 )
 
@@ -140,7 +141,19 @@ class ResponseSetSubmitView(generics.UpdateAPIView):
 
     def get_queryset(self):
         # Users can only submit their own response sets
-        return super().get_queryset().filter(user=self.request.user, status='DRAFT')
+        return super().get_queryset().filter(user=self.request.user, status__in=['DRAFT', 'COMPLETED'])
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        if instance.status == 'COMPLETED':
+            serializer = self.get_serializer(instance)
+            return DRFResponse(serializer.data, status=status.HTTP_200_OK)
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return DRFResponse(serializer.data)
 
     def post(self, request, *args, **kwargs):
         # Alias POST to perform the update
@@ -192,7 +205,7 @@ class AdminT0ResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T0 baseline psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -201,10 +214,7 @@ class AdminT0ResponseListView(generics.ListAPIView):
             milestone='SIGNUP',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user__group', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        ).order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 class AdminT0ResponseDetailView(generics.RetrieveAPIView):
     """
@@ -228,7 +238,7 @@ class AdminT1ResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T1 follow-up (Day 7) psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -237,10 +247,7 @@ class AdminT1ResponseListView(generics.ListAPIView):
             milestone='7_DAYS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user__group', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        ).order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 
 class AdminT1ResponseDetailView(generics.RetrieveAPIView):
@@ -265,7 +272,7 @@ class AdminTFirstMonthResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T-First-Month follow-up (Day 30) psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -274,7 +281,7 @@ class AdminTFirstMonthResponseListView(generics.ListAPIView):
             milestone='1_MONTH',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user', 'questionnaire').order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 
 class AdminTFirstMonthResponseDetailView(generics.RetrieveAPIView):
@@ -299,7 +306,7 @@ class AdminT2ResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T2 follow-up (Day 90) psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -308,10 +315,7 @@ class AdminT2ResponseListView(generics.ListAPIView):
             milestone='3_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user__group', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        ).order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 
 class AdminT2ResponseDetailView(generics.RetrieveAPIView):
@@ -336,7 +340,7 @@ class AdminT3ResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T3 follow-up (Month 6) psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -345,10 +349,7 @@ class AdminT3ResponseListView(generics.ListAPIView):
             milestone='6_MONTHS',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user__group', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        ).order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 
 class AdminT3ResponseDetailView(generics.RetrieveAPIView):
@@ -373,7 +374,7 @@ class AdminT4ResponseListView(generics.ListAPIView):
     """
     Researcher-only view to list all completed T4 follow-up (Month 12) psychometric assessments.
     """
-    serializer_class = AdminResponseSetSerializer
+    serializer_class = AdminResponseSetListSerializer
     permission_classes = (permissions.IsAdminUser,)
     pagination_class = StandardResultsSetPagination
 
@@ -382,10 +383,7 @@ class AdminT4ResponseListView(generics.ListAPIView):
             milestone='1_YEAR',
             questionnaire__assessment_type='PSYCHOMETRIC',
             status='COMPLETED'
-        ).select_related('user__group', 'questionnaire').prefetch_related(
-            'responses__question',
-            'responses__selected_option'
-        ).order_by('-completed_at')
+        ).select_related('user__group', 'questionnaire').order_by('-completed_at')
 
 
 class AdminT4ResponseDetailView(generics.RetrieveAPIView):
@@ -417,6 +415,8 @@ class AdminSuicideRiskFollowUpsView(APIView):
         from .safety_cache import get_suicide_risk_admin_cache
 
         show = request.query_params.get("show", "opt_in")
+        status_filter = request.query_params.get("status", "PENDING").upper()
+
         payload = get_suicide_risk_admin_cache(refresh_if_missing=True)
         if not payload:
             return DRFResponse(
@@ -436,6 +436,9 @@ class AdminSuicideRiskFollowUpsView(APIView):
             cases = payload["cases"]
         else:
             cases = payload["opt_in_cases"]
+
+        # Filter by status
+        cases = [c for c in cases if c.get("suicide_risk_status", "PENDING").upper() == status_filter]
 
         # Manual Pagination
         page_size = 10
@@ -464,6 +467,39 @@ class AdminSuicideRiskFollowUpsView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class AdminSuicideRiskFollowUpDetailView(APIView):
+    """
+    Update endpoint for suicide risk cases.
+    """
+    permission_classes = (permissions.IsAdminUser,)
+
+    def patch(self, request, pk):
+        try:
+            response_set = ResponseSet.objects.get(id=pk, suicide_risk_triggered=True)
+        except ResponseSet.DoesNotExist:
+            return DRFResponse({"detail": "Case not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get("suicide_risk_status")
+        if not new_status:
+            return DRFResponse({"detail": "suicide_risk_status field is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        new_status = new_status.upper()
+        if new_status not in ["PENDING", "RESOLVED"]:
+            return DRFResponse({"detail": "Invalid status value. Choose PENDING or RESOLVED."}, status=status.HTTP_400_BAD_REQUEST)
+
+        response_set.suicide_risk_status = new_status
+        response_set.save(update_fields=["suicide_risk_status"])
+
+        # Force refresh of cache
+        from .safety_cache import refresh_suicide_risk_admin_cache
+        refresh_suicide_risk_admin_cache()
+
+        return DRFResponse({
+            "response_set_id": str(response_set.id),
+            "suicide_risk_status": response_set.suicide_risk_status
+        }, status=status.HTTP_200_OK)
 
 
 class DueMilestoneView(generics.GenericAPIView):

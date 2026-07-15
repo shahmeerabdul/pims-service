@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { LogOut, User, LayoutDashboard, Settings, Menu, X, HelpCircle } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { LogOut, User, LayoutDashboard, Settings, Menu, X, HelpCircle, Home } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import SupportModal from './SupportModal';
 import { useTranslation } from 'react-i18next';
@@ -8,11 +8,17 @@ import api from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
 
 const Navbar: React.FC = () => {
-  
+  const location = useLocation();
+  const isActivityPage = location.pathname.startsWith('/activity');
+  const isDashboardPage = location.pathname === '/dashboard';
+
   const { t } = useTranslation();
   const isAuthenticated = !!localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
   const isAdmin = userRole === 'Admin';
+  const isLandingPage = location.pathname === '/';
+  const showLanguageSwitcher = isAuthenticated && !isActivityPage && !isDashboardPage && !isLandingPage;
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [unreadReplies, setUnreadReplies] = useState(0);
@@ -39,6 +45,13 @@ const Navbar: React.FC = () => {
     }
   }, [isAuthenticated, isAdmin, isSupportOpen]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('support') === 'true') {
+      setIsSupportOpen(true);
+    }
+  }, [location.search]);
+
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = '/login';
@@ -49,11 +62,11 @@ const Navbar: React.FC = () => {
       <SupportModal isOpen={isSupportOpen} onClose={() => setIsSupportOpen(false)} />
       <nav className="border-b border-zinc-200 bg-white relative z-50">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          
+
           {/* Logo & Main Navigation (Left Side) */}
           <div className="flex items-center gap-8">
-            <Link to="/" className="text-xl font-bold text-zinc-900 tracking-tight flex items-center gap-2">
-              PsychPlatform
+            <Link to="/" className="text-xl font-bold text-[#2E4E90] tracking-tight flex items-center gap-2">
+              Psycheversity
             </Link>
           </div>
 
@@ -62,9 +75,14 @@ const Navbar: React.FC = () => {
             {isAuthenticated && (
               <>
                 {!isAdmin && (
-                  <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2">
-                    <LayoutDashboard size={18} /> {t('navbar.dashboard')}
-                  </Link>
+                  <>
+                    <Link to="/" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2">
+                      <Home size={18} /> {t('navbar.home')}
+                    </Link>
+                    <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2">
+                      <LayoutDashboard size={18} /> {t('navbar.dashboard')}
+                    </Link>
+                  </>
                 )}
                 {isAdmin && (
                   <Link to="/admin" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2">
@@ -74,7 +92,7 @@ const Navbar: React.FC = () => {
               </>
             )}
 
-            {!isAdmin && (
+            {!isAdmin && showLanguageSwitcher && (
               <div className="border-r border-zinc-100 pr-4 mr-2">
                 <LanguageSwitcher />
               </div>
@@ -85,21 +103,9 @@ const Navbar: React.FC = () => {
                 <Link to="/profile" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2">
                   <User size={18} /> {t('navbar.profile')}
                 </Link>
-                
-                {!isAdmin && (
-                  <button
-                    onClick={() => setIsSupportOpen(true)}
-                    className="relative text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors flex items-center gap-2"
-                  >
-                    <HelpCircle size={18} /> Support
-                    {unreadReplies > 0 && (
-                      <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                        {unreadReplies}
-                      </span>
-                    )}
-                  </button>
-                )}
-                
+
+
+
                 <button
                   onClick={handleLogout}
                   className="text-sm font-medium text-zinc-900 border border-zinc-200 px-3 py-1 rounded hover:bg-zinc-900 hover:text-white transition-all flex items-center gap-2"
@@ -119,11 +125,14 @@ const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Mobile Hamburger Toggle */}
-          <div className="md:hidden flex items-center">
+          {/* Mobile Actions */}
+          <div className="md:hidden flex items-center gap-2">
+            {!isAdmin && showLanguageSwitcher && (
+              <LanguageSwitcher />
+            )}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-zinc-600 hover:text-zinc-900 focus:outline-none"
+              className="text-zinc-600 hover:text-zinc-900 focus:outline-none p-1"
             >
               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -133,22 +142,25 @@ const Navbar: React.FC = () => {
         {/* Mobile Menu Drawer */}
         {isMenuOpen && (
           <div className="md:hidden border-t border-zinc-100 bg-white py-4 px-6 space-y-4 animate-in slide-in-from-top-2 duration-200">
-            {!isAdmin && (
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-50">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Language</span>
-                <LanguageSwitcher />
-              </div>
-            )}
             {isAuthenticated ? (
               <>
                 {!isAdmin && (
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center gap-3 text-sm font-medium text-zinc-600 py-2"
-                  >
-                    <LayoutDashboard size={20} /> {t('navbar.dashboard')}
-                  </Link>
+                  <>
+                    <Link
+                      to="/"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-3 text-sm font-medium text-zinc-600 py-2"
+                    >
+                      <Home size={20} /> {t('navbar.home')}
+                    </Link>
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-3 text-sm font-medium text-zinc-600 py-2"
+                    >
+                      <LayoutDashboard size={20} /> {t('navbar.dashboard')}
+                    </Link>
+                  </>
                 )}
                 {isAdmin && (
                   <Link
@@ -166,25 +178,9 @@ const Navbar: React.FC = () => {
                 >
                   <User size={20} /> {t('navbar.profile')}
                 </Link>
-                
-                {!isAdmin && (
-                  <button
-                    onClick={() => {
-                      setIsSupportOpen(true);
-                      setIsMenuOpen(false);
-                    }}
-                    className="flex items-center gap-3 text-sm font-medium text-zinc-600 py-2 w-full text-left"
-                  >
-                    <div className="relative">
-                      <HelpCircle size={20} />
-                      {unreadReplies > 0 && (
-                        <span className="absolute -top-1 -right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
-                      )}
-                    </div>
-                    Support
-                  </button>
-                )}
-                
+
+
+
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-3 text-sm font-medium text-red-600 py-2 w-full text-left"
@@ -213,6 +209,21 @@ const Navbar: React.FC = () => {
           </div>
         )}
       </nav>
+      {isAuthenticated && !isAdmin && (
+        <button
+          onClick={() => setIsSupportOpen(true)}
+          className="fixed bottom-6 left-6 sm:left-auto sm:right-6 z-50 px-5 py-3 bg-zinc-900 text-white hover:bg-zinc-800 rounded-full shadow-2xl hover:shadow-zinc-900/30 transition-all duration-300 hover:scale-105 flex items-center gap-2 border border-zinc-700/50 animate-in fade-in zoom-in-95 duration-300 font-semibold text-sm"
+          title="Support / رابطہ"
+        >
+          <HelpCircle size={18} />
+          <span>Support / مدد</span>
+          {unreadReplies > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center border border-white">
+              {unreadReplies}
+            </span>
+          )}
+        </button>
+      )}
     </>
   );
 };

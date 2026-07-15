@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'questionnaires',
     'admin_tools',
     'support',
+    'emails',
 ]
 
 MIDDLEWARE = [
@@ -240,7 +241,7 @@ REST_FRAMEWORK = {
 
 # JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=30), # Logged in for 30 days
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=5),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
     'ROTATE_REFRESH_TOKENS': True,
     'ALGORITHM': 'HS256',
@@ -273,10 +274,13 @@ if 'test' in sys.argv or 'pytest' in sys.modules:
 # Celery Beat Schedule
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
-    'daily-morning-reminder': {
-        'task': 'notifications.tasks.check_and_send_daily_reminders',
+    'booster-daily-nudge': {
+        'task': 'emails.booster_tasks.send_booster_daily_nudges',
         'schedule': crontab(hour=9, minute=0),
-        'args': ('morning',),
+    },
+    'booster-phase-invite': {
+        'task': 'emails.booster_tasks.send_booster_phase_invites',
+        'schedule': crontab(hour=9, minute=15),
     },
     'daily-evening-reminder': {
         'task': 'notifications.tasks.check_and_send_daily_reminders',
@@ -287,6 +291,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'notifications.tasks.run_tier3_daily_evaluation',
         'schedule': crontab(hour=1, minute=0),
     },
+    'assessment-milestone-due-reminders': {
+        'task': 'notifications.tasks.send_longitudinal_milestone_reminders',
+        'schedule': crontab(hour=9, minute=30),
+    },
     'assessment-graduated-reminders': {
         'task': 'notifications.tasks.run_assessment_graduated_reminders',
         'schedule': crontab(hour=2, minute=0),
@@ -294,6 +302,10 @@ CELERY_BEAT_SCHEDULE = {
     'daily-suicide-risk-admin-cache': {
         'task': 'questionnaires.tasks.refresh_suicide_risk_admin_cache_task',
         'schedule': crontab(hour=3, minute=0),
+    },
+    'perma-report-catchup': {
+        'task': 'questionnaires.tasks.check_and_send_perma_reports',
+        'schedule': crontab(hour=8, minute=0),
     },
 }
 # Spectacular Settings
@@ -312,6 +324,15 @@ EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='no-reply@psycheversity.com')
+SITE_BASE_URL = env('SITE_BASE_URL', default='https://psycheversity.com')
+PARTICIPANT_EMAIL_FROM = env(
+    'PARTICIPANT_EMAIL_FROM',
+    default='Psycheversity Research Team <no-reply@psycheversity.com>',
+)
+PARTICIPANT_EMAIL_REPLY_TO = env('PARTICIPANT_EMAIL_REPLY_TO', default='support@psycheversity.com')
+SUPPORT_ADMIN_EMAIL = env('SUPPORT_ADMIN_EMAIL', default='support@psycheversity.com')
+PARTICIPANT_WITHDRAW_URL = env('PARTICIPANT_WITHDRAW_URL', default='')
+PARTICIPANT_SUPPORT_URL = env('PARTICIPANT_SUPPORT_URL', default='')
 
 # Ensure logs directory exists
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)

@@ -48,14 +48,14 @@ class TestDailyReminders:
         # Mark User 2 as having submitted today
         Submission.objects.create(user=u2, activity=today_activity, content="Done")
         
-        # Run morning reminder
+        # Run morning reminder (triggers E3 daily nudge email via send_notification)
         result = check_and_send_daily_reminders(reminder_type='morning')
         
         # Assertions
         assert "Sent 1 morning reminders" in result
         
-        # Verify User 1 got a notification, but User 2 and 3 did not
-        assert Notification.objects.filter(user=u1, message__icontains="morning").exists()
+        # Verify User 1 got an email notification, but User 2 and 3 did not
+        assert Notification.objects.filter(user=u1, n_type='email', message__icontains="morning").exists()
         assert not Notification.objects.filter(user=u2).exists()
         assert not Notification.objects.filter(user=u3).exists()
         
@@ -71,8 +71,9 @@ class TestDailyReminders:
         
         assert "Sent 2 evening reminders" in result # User 1 and User 2 both haven't submitted
         
-        # Verify evening specific message
+        # Verify evening specific message (email)
         notification = Notification.objects.filter(user=u1).first()
+        assert notification.n_type == 'email'
         assert "Good evening" in notification.message
         assert "still time" in notification.message
 
@@ -323,3 +324,27 @@ class TestMissedDayProtocol:
         result = run_assessment_graduated_reminders()
         assert "Graduated reminders sent: 0" in result
         assert Notification.objects.filter(user=user).count() == 0
+
+    @patch('notifications.tasks.send_notification.delay')
+    def test_tier4_assessment_overdue_downtime_robustness(self, mock_delay, test_group):
+        from datetime import timedelta
+        from notifications.tasks import run_assessment_graduated_reminders
+        from support.models import SupportTicket
+
+        # Setup user with onboarding completed 18 days ago (7_DAYS milestone overdue by 11 days)
+        # simulating that the daily checker was down on day 10.
+        user = User.objects.create_user(
+            username="t4_downtime", email="t4_dt@test.com", password="pwd",
+            group=test_group, has_completed_sociodemographic=True,
+            onboarding_completed_at=timezone.now() - timedelta(days=18)
+        )
+
+        result = run_assessment_graduated_reminders()
+        assert "Support call tickets created: 1" in result
+
+        # Verify call ticket was created
+        ticket = SupportTicket.objects.filter(user=user).first()
+        assert ticket is not None
+        assert "Call Protocol: Assessment Overdue" in ticket.subject
+        assert "Tier 4" in ticket.subject
+        assert ticket.status == 'Open'

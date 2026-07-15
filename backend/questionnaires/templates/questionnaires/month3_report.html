@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Three Months PERMA Profiler Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 12mm;
+
+            @bottom-right {
+                content: "Page 1 of 1";
+                font-family: Arial, sans-serif;
+                font-size: 8pt;
+                color: #71717a;
+            }
+        }
+
+        @font-face {
+            font-family: 'Jameel Noori Nastaleeq';
+            src: url('file:///usr/share/fonts/truetype/JameelNooriNastaleeq.ttf');
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #18181b;
+            margin: 0;
+            padding: 0;
+            line-height: 1.4;
+            background-color: #ffffff;
+        }
+
+        .container {
+            width: 100%;
+        }
+
+        .header {
+            border-bottom: 2px solid #C8A951;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-logo {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #2E4E90;
+            letter-spacing: 1.5px;
+            font-family: Arial, sans-serif;
+        }
+
+        .header-info {
+            text-align: right;
+            font-size: 8.5pt;
+            color: #52525b;
+            vertical-align: middle;
+            font-family: Arial, sans-serif;
+        }
+
+        .section-split {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        .section-td {
+            width: 50%;
+            vertical-align: top;
+        }
+
+        .report-section-en {
+            padding-right: 12px;
+            border-right: 1px solid #e4e4e7;
+        }
+
+        .report-section-ur {
+            padding-left: 12px;
+            direction: rtl;
+            text-align: right;
+        }
+
+        .title-english {
+            font-size: 13pt;
+            color: #2E4E90;
+            margin-top: 0;
+            margin-bottom: 6px;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+        }
+
+        .title-urdu {
+            font-family: 'Jameel Noori Nastaleeq', serif;
+            font-size: 16pt;
+            color: #2E4E90;
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-weight: normal;
+        }
+
+        .text-english {
+            font-size: 9pt;
+            color: #3f3f46;
+            margin-bottom: 8px;
+            text-align: justify;
+        }
+
+        .text-urdu {
+            font-family: 'Jameel Noori Nastaleeq', serif;
+            font-size: 12pt;
+            color: #3f3f46;
+            margin-bottom: 6px;
+            text-align: justify;
+            line-height: 1.6;
+        }
+
+        .retention-english {
+            font-size: 9.5pt;
+            font-weight: bold;
+            color: #2E4E90;
+            margin-top: 10px;
+        }
+
+        .retention-urdu {
+            font-family: 'Jameel Noori Nastaleeq', serif;
+            font-size: 13pt;
+            font-weight: normal;
+            color: #2E4E90;
+            margin-top: 5px;
+        }
+
+        .chart-container {
+            text-align: center;
+            margin: 10px auto;
+            padding: 8px;
+            border: 1px solid #e4e4e7;
+            background-color: #fcfcfc;
+            max-width: 580px;
+        }
+
+        .chart-img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .legend-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            font-size: 8pt;
+        }
+
+        .legend-table th,
+        .legend-table td {
+            border: 1px solid #e4e4e7;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .legend-table th {
+            background-color: #f4f4f5;
+            color: #2E4E90;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+        }
+
+        .legend-ur {
+            font-family: 'Jameel Noori Nastaleeq', serif;
+            font-size: 11pt;
+            text-align: right;
+            direction: rtl;
+        }
+
+        .footer {
+            margin-top: 12px;
+            border-top: 1px solid #e4e4e7;
+            padding-top: 6px;
+            font-size: 7.5pt;
+            color: #71717a;
+        }
+
+        .footer-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .footer-left {
+            text-align: left;
+            font-family: Arial, sans-serif;
+        }
+
+        .footer-right {
+            text-align: right;
+            font-family: 'Jameel Noori Nastaleeq', serif;
+            font-size: 10.5pt;
+            direction: rtl;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <table class="header-table">
+                <tr>
+                    <td class="header-logo">
+                        {% if logo_image %}
+                            <img src="data:image/png;base64,{{ logo_image }}" style="height: 45px; width: auto; display: block;" alt="PIMS Logo">
+                        {% else %}
+                            PIMS
+                        {% endif %}
+                    </td>
+                    <td class="header-info">
+                        Participant ID: {{ user_id }}<br>
+                        Group: {{ group_name }}<br>
+                        Date: {{ date }}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Bilingual Side-by-Side Section -->
+        <table class="section-split">
+            <tr>
+                <!-- English Section -->
+                <td class="section-td report-section-en">
+                    <h1 class="title-english">Month-3 PERMA Profile Report</h1>
+                    <p class="text-english">
+                        This feedback report presents your longitudinal PERMA profile scores from the onboarding
+                        baseline (T0) up to the 3-Month assessment (T2).
+                    </p>
+                    <div class="retention-english">
+                        Please continue to your next entries.
+                    </div>
+                </td>
+
+                <!-- Urdu Section -->
+                <td class="section-td report-section-ur">
+                    <h1 class="title-urdu">تیسرے مہینے کی PERMA پروفائل رپورٹ</h1>
+                    <p class="text-urdu">
+                        یہ فیڈبیک رپورٹ سائن اپ فاؤنڈیشن (T0) سے لے کر تیسرے مہینے کے جائزے (T2) تک آپ کی مجموعی فلاح و
+                        بہبود کے اسکورز کا گراف پیش کرتی ہے۔
+                    </p>
+                    <div class="retention-urdu">
+                        براہ کرم اپنے اگلے اندراجات جاری رکھیں۔
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Matplotlib Chart -->
+        <div class="chart-container">
+            <img class="chart-img" src="data:image/png;base64,{{ chart_image }}" alt="PERMA Trajectory Chart">
+        </div>
+
+        <!-- Legend Table -->
+        <table class="legend-table">
+            <tr>
+                <th style="width: 10%;">Code</th>
+                <th style="width: 40%;">Factor Description / عامل کی تفصیل</th>
+                <th style="width: 10%;">Code</th>
+                <th style="width: 40%;">Factor Description / عامل کی تفصیل</th>
+            </tr>
+            <tr>
+                <td><strong>P</strong></td>
+                <td>Positive Emotion / <span class="legend-ur">مثبت جذبات</span></td>
+                <td><strong>N</strong></td>
+                <td>Negative Emotion / <span class="legend-ur">منفی جذبات</span></td>
+            </tr>
+            <tr>
+                <td><strong>E</strong></td>
+                <td>Engagement / <span class="legend-ur">مشغولیت</span></td>
+                <td><strong>H</strong></td>
+                <td>Health / <span class="legend-ur">صحت</span></td>
+            </tr>
+            <tr>
+                <td><strong>R</strong></td>
+                <td>Relationships / <span class="legend-ur">تعلقات</span></td>
+                <td><strong>Lon</strong></td>
+                <td>Loneliness / <span class="legend-ur">اکیلا پن</span></td>
+            </tr>
+            <tr>
+                <td><strong>M</strong></td>
+                <td>Meaning / <span class="legend-ur">مقصدِ زندگی</span></td>
+                <td><strong>Overall</strong></td>
+                <td>Overall Well-being / <span class="legend-ur">مجموعی فلاح</span></td>
+            </tr>
+            <tr>
+                <td><strong>A</strong></td>
+                <td>Accomplishment / <span class="legend-ur">کامیابی</span></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+
+        <!-- Footer -->
+        <div class="footer">
+            <table class="footer-table">
+                <tr>
+                    <td class="footer-left">Pakistan Intervention Management System (PIMS)</td>
+                    <td class="footer-right">پاکستان انٹرونشن مینجمنٹ سسٹم (PIMS)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+</body>
+
+</html>

@@ -3,6 +3,19 @@ Shared helpers for admin CSV export tasks.
 """
 import re
 
+_FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def sanitize_csv_cell(value: str) -> str:
+    """
+    Prevent CSV formula injection by prepending an apostrophe to any cell
+    value that starts with a spreadsheet formula trigger character.
+    Excel/Calc treat the apostrophe-prefixed value as plain text.
+    """
+    if value and value[0] in _FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
 from questionnaires.scoring import (
     PERMA_ITEM_CODES,
     battery_score_column_names,
@@ -15,12 +28,19 @@ def build_psych_item_headers_and_columns(psy_questions, milestone_suffix):
     """
     Build item-level CSV headers and question-id column mapping for psychometric exports.
     Returns (headers, question_ids).
+
+    TEXT-type questions (section instruction headers) are excluded — they carry
+    no participant response and would produce empty columns in the export.
     """
     headers = []
     question_ids = []
     tag_counters = {}
 
     for question in psy_questions:
+        # Skip non-scoreable section headers
+        if question.type == "TEXT":
+            continue
+
         match = re.match(r"^\[([^\]]+)\]", question.content)
         tag = re.sub(r"[^a-zA-Z0-9]", "", match.group(1)).upper() if match else "PSYCH"
         tag_counters[tag] = tag_counters.get(tag, 0) + 1
@@ -39,12 +59,17 @@ def build_psych_item_headers_and_columns(psy_questions, milestone_suffix):
 
 
 def append_psych_item_values(row, resp_map, question_ids):
-    """Append raw item response labels to a CSV row."""
+    """Append raw item response scale values (numeric) to a CSV row."""
     for question_id in question_ids:
         answer = resp_map.get(question_id)
         if answer:
-            value = answer.selected_option.label if answer.selected_option else (answer.text_value or "")
-            row.append(value.replace("\n", " "))
+            if answer.selected_option_value is not None:
+                value = str(answer.selected_option_value)
+            elif answer.selected_option:
+                value = str(answer.selected_option.numeric_value)
+            else:
+                value = answer.text_value or ""
+            row.append(sanitize_csv_cell(value.replace("\n", " ")))
         else:
             row.append("")
 

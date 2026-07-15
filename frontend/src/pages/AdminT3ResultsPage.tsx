@@ -56,6 +56,7 @@ const AdminT3ResultsPage: React.FC = () => {
   const [selectedSubmission, setSelectedSubmission] = useState<PosttestSet | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | null>(null);
+  const [exportType, setExportType] = useState<'psychometric' | 'daily_entries' | null>(null);
 
   const fetchSubmissions = async (page: number = 1) => {
     setLoading(true);
@@ -109,18 +110,25 @@ const AdminT3ResultsPage: React.FC = () => {
             setExportStatus(null);
             const link = document.createElement('a');
             link.href = file_url;
-            const dateStr = new Date().toISOString().split('T')[0];
-            link.setAttribute('download', `t3_results_${dateStr}.csv`);
+            
+            const filename = exportType === 'daily_entries'
+              ? 't3_daily_entries_export.csv'
+              : `t3_results_${new Date().toISOString().split('T')[0]}.csv`;
+              
+            link.setAttribute('download', filename);
             document.body.appendChild(link);
             link.click();
             link.remove();
+            setExportType(null);
           } else if (status === 'FAILED') {
             setExportingId(null);
+            setExportType(null);
           }
         } catch (err) {
           console.error('Polling failed', err);
           setExportingId(null);
           setExportStatus('FAILED');
+          setExportType(null);
         }
       }, 2000);
     }
@@ -128,7 +136,7 @@ const AdminT3ResultsPage: React.FC = () => {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [exportingId, exportStatus]);
+  }, [exportingId, exportStatus, exportType]);
 
   const handleViewDetail = async (id: string) => {
     try {
@@ -142,6 +150,7 @@ const AdminT3ResultsPage: React.FC = () => {
   const handleExport = async () => {
     try {
       setExportStatus('PENDING');
+      setExportType('psychometric');
       const response = await questionnairesApi.triggerAdminT3Export(selectedGroup);
       setExportingId(response.data.task_id);
       setError(null);
@@ -149,6 +158,22 @@ const AdminT3ResultsPage: React.FC = () => {
       console.error('Failed to export T3 follow-up data', err);
       setError('Failed to initiate CSV export. Please check server logs.');
       setExportStatus(null);
+      setExportType(null);
+    }
+  };
+
+  const handleExportDailyEntries = async () => {
+    try {
+      setExportStatus('PENDING');
+      setExportType('daily_entries');
+      const response = await questionnairesApi.triggerAdminDailyEntriesExport(selectedGroup, 'PRE_T3');
+      setExportingId(response.data.task_id);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to export T3 daily entries data', err);
+      setError('Failed to initiate CSV export. Please check server logs.');
+      setExportStatus(null);
+      setExportType(null);
     }
   };
 
@@ -173,54 +198,87 @@ const AdminT3ResultsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pt-0">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-200 pb-6">
-        <div className="space-y-1 flex-1">
-          <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium mb-1">
-            <ClipboardCheck size={14} /> 6-Month Assessment
+      <header className="border-b border-zinc-200 pb-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium">
+              <ClipboardCheck size={14} /> 6-Month Assessment
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight">
+              6-Month Assessment Results
+            </h1>
+            <p className="text-zinc-500 text-sm">
+              Psychometric results from completed 6-month assessments
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-zinc-900">6-Month Assessment Results</h1>
-          <p className="text-zinc-500 text-sm">Psychometric results from completed 6-month assessments</p>
+          <div className="flex items-center md:self-end">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-205 rounded-lg text-sm">
+              <span className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Total Participants:</span>
+              <span className="font-bold text-zinc-800 text-sm font-mono">{totalCount}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-          <button
-            onClick={handleExport}
-            disabled={!!exportingId}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-800 text-white rounded-lg font-medium text-sm hover:bg-zinc-700 transition-colors disabled:opacity-40 whitespace-nowrap mr-2"
-          >
-            {exportingId ? (
-              <>
-                <RotateCw size={16} className="animate-spin" />
-                Preparing...
-              </>
-            ) : (
-              <>
-                <Download size={16} /> Export CSV
-              </>
-            )}
-          </button>
-          
-          <div className="relative group flex-grow sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search participants..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-200 transition-all text-sm"
-            />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <div className="relative group sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search participants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-200 transition-all text-sm"
+              />
+            </div>
+
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:outline-none text-sm text-zinc-700 cursor-pointer"
+            >
+              <option value="All">All Groups</option>
+              {uniqueGroups.sort().map(grp => (
+                <option key={grp} value={grp}>{grp}</option>
+              ))}
+            </select>
           </div>
 
-          <select
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="px-3 py-2.5 bg-white border border-zinc-200 rounded-lg focus:outline-none text-sm text-zinc-700 cursor-pointer"
-          >
-            <option value="All">All Groups</option>
-            {uniqueGroups.sort().map(grp => (
-              <option key={grp} value={grp}>{grp}</option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              disabled={!!exportingId}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 text-white rounded-lg font-medium text-sm hover:bg-zinc-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+            >
+              {exportingId && exportType === 'psychometric' ? (
+                <>
+                  <RotateCw size={14} className="animate-spin" />
+                  Preparing...
+                </>
+              ) : (
+                <>
+                  <Download size={14} /> Export Assessments CSV
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleExportDailyEntries}
+              disabled={!!exportingId}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 text-white rounded-lg font-medium text-sm hover:bg-zinc-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+            >
+              {exportingId && exportType === 'daily_entries' ? (
+                <>
+                  <RotateCw size={14} className="animate-spin" />
+                  Preparing...
+                </>
+              ) : (
+                <>
+                  <Download size={14} /> Export Daily Entries
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 

@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
+from django.core import mail
 from questionnaires.models import Questionnaire, Question, Option, ResponseSet
 from groups.models import Group
 
@@ -50,7 +51,7 @@ def test_user_onboarding_default_state(fresh_user):
     assert fresh_user.has_completed_sociodemographic is False
     assert fresh_user.group is None
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_sociodemographic_submission_completes_onboarding(fresh_client, fresh_user, test_group):
     """
     Submitting the sociodemographic questionnaire completed sociodemographic status,
@@ -105,8 +106,15 @@ def test_sociodemographic_submission_completes_onboarding(fresh_client, fresh_us
 
     fresh_user.refresh_from_db()
     assert fresh_user.onboarding_completed_at is not None  # Now onboarding is fully complete
+    # Welcome email + PERMA baseline report email are both sent on SIGNUP completion
+    assert len(mail.outbox) == 2
+    subjects = [m.subject for m in mail.outbox]
+    assert any('Welcome to Psycheversity' in s for s in subjects)
+    welcome = next(m for m in mail.outbox if 'Welcome to Psycheversity' in m.subject)
+    assert 'سائیکیورسٹی میں خوش آمدید' in welcome.subject
+    assert welcome.to == [fresh_user.email]
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_sociodemographic_disqualification(fresh_client, fresh_user, test_group):
     """
     Submitting a sociodemographic response set with a disqualifying answer
@@ -147,8 +155,12 @@ def test_sociodemographic_disqualification(fresh_client, fresh_user, test_group)
     assert fresh_user.disqualification_reason != ""
     assert fresh_user.has_completed_sociodemographic is False
     assert fresh_user.group is None
+    assert len(mail.outbox) == 1
+    disqualification = mail.outbox[0]
+    assert 'Thank you for your interest' in disqualification.subject
+    assert 'not the right fit for you at this time' in disqualification.alternatives[0][0]
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_sociodemographic_disqualification_by_order(fresh_client, fresh_user, test_group):
     """
     Submitting a sociodemographic response set with a question of order 11/12
@@ -189,6 +201,7 @@ def test_sociodemographic_disqualification_by_order(fresh_client, fresh_user, te
     assert fresh_user.disqualification_reason != ""
     assert fresh_user.has_completed_sociodemographic is False
     assert fresh_user.group is None
+    assert len(mail.outbox) == 1
 
 @pytest.mark.django_db
 def test_7_days_milestone_completion_marks_posttest(fresh_client, fresh_user):

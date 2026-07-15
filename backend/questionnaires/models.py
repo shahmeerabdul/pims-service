@@ -89,6 +89,17 @@ class ResponseSet(models.Model):
     scores = models.JSONField(default=dict, blank=True, help_text="Calculated subscale and total scores on submission")
     suicide_risk_triggered = models.BooleanField(default=False)
     suicide_risk_opt_in = models.BooleanField(null=True, blank=True)
+    
+    SUICIDE_RISK_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('RESOLVED', 'Resolved'),
+    )
+    suicide_risk_status = models.CharField(
+        max_length=15,
+        choices=SUICIDE_RISK_STATUS_CHOICES,
+        default='PENDING',
+        db_index=True
+    )
 
     class Meta:
         indexes = [
@@ -105,6 +116,26 @@ class ResponseSet(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.questionnaire.title if self.questionnaire else 'Deleted Questionnaire'} ({self.status})"
+
+class PermaReportLog(models.Model):
+    """Audit trail for PERMA snapshot report emails. Enforces never-send-twice."""
+    STATUS_CHOICES = (
+        ('sent', 'Sent'),
+        ('error', 'Error'),
+        ('skipped', 'Skipped'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perma_report_logs')
+    milestone = models.CharField(max_length=15)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='sent')
+    error_detail = models.TextField(blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'milestone')
+
+    def __str__(self):
+        return f"{self.user.username} – {self.milestone} – {self.status}"
+
 
 class Response(models.Model):
     """

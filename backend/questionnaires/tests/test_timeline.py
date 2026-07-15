@@ -198,7 +198,6 @@ class TestTimelineScheduler:
             # Populate other cache keys
             cache.set(f"user_{onboarded_user.id}_activity_state", "some_state")
             cache.set(f"user_{onboarded_user.id}_exp_day", 7)
-            cache.set(f"user_{onboarded_user.id}_completion_rate", 85)
 
             # Submit via ResponseSetSubmitSerializer
             rs = ResponseSet.objects.create(
@@ -224,7 +223,6 @@ class TestTimelineScheduler:
             assert cache.get(cache_key) is None
             assert cache.get(f"user_{onboarded_user.id}_activity_state") is None
             assert cache.get(f"user_{onboarded_user.id}_exp_day") is None
-            assert cache.get(f"user_{onboarded_user.id}_completion_rate") is None
 
     def test_due_milestone_api_view(self, api_client, onboarded_user):
         api_client.force_authenticate(user=onboarded_user)
@@ -264,4 +262,47 @@ def test_milestone_availability_by_timeline_delta(authenticated_client, test_use
     response = authenticated_client.get(url)
     assert response.status_code == status.HTTP_200_OK
     assert response.data['due_milestone'] == '3_MONTHS'
+
+
+@pytest.mark.django_db
+def test_due_milestone_immediately_after_day7_submission(authenticated_client, test_user):
+    from activities.models import Activity, Submission
+    from phases.models import Phase
+
+    test_user.has_completed_sociodemographic = True
+    test_user.onboarding_completed_at = timezone.now()
+    test_user.save()
+
+    # Clear cache
+    cache.clear()
+
+    # Day 0: Nothing due yet
+    url = '/api/questionnaires/due/'
+    response = authenticated_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['due_milestone'] is None
+
+    # Create dummy activity and submission for PRE_T1 day 7
+    phase = Phase.objects.create(phase_number=1, name="Phase 1", start_date=timezone.now(), end_date=timezone.now() + timedelta(days=30))
+    activity = Activity.objects.create(
+        title="Day 7 Activity",
+        description="Day 7",
+        assigned_phase=phase,
+        activity_type="task",
+        day_number=7
+    )
+    
+    # Submit Day 7
+    Submission.objects.create(
+        user=test_user,
+        activity=activity,
+        content="Entry info",
+        activity_wave="PRE_T1",
+        experiment_day=7
+    )
+
+    # Cache should be cleared by signal, get_due_milestone should return 7_DAYS immediately
+    response = authenticated_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['due_milestone'] == '7_DAYS'
 

@@ -56,6 +56,16 @@ services:
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-admin}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp-relay.brevo.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@psycheversity.com}
+      PARTICIPANT_EMAIL_FROM: ${PARTICIPANT_EMAIL_FROM:-Psycheversity Research Team <no-reply@psycheversity.com>}
+      PARTICIPANT_EMAIL_REPLY_TO: ${PARTICIPANT_EMAIL_REPLY_TO:-support@psycheversity.com}
+      SITE_BASE_URL: ${SITE_BASE_URL:-https://psycheversity.com}
       TZ: Asia/Karachi
     depends_on:
       db:
@@ -81,6 +91,16 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://psych_user:psych_pass@db:5432/psych_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp-relay.brevo.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@psycheversity.com}
+      PARTICIPANT_EMAIL_FROM: ${PARTICIPANT_EMAIL_FROM:-Psycheversity Research Team <no-reply@psycheversity.com>}
+      PARTICIPANT_EMAIL_REPLY_TO: ${PARTICIPANT_EMAIL_REPLY_TO:-support@psycheversity.com}
+      SITE_BASE_URL: ${SITE_BASE_URL:-https://psycheversity.com}
       TZ: Asia/Karachi
     depends_on:
       db:
@@ -105,6 +125,16 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://psych_user:psych_pass@db:5432/psych_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp-relay.brevo.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@psycheversity.com}
+      PARTICIPANT_EMAIL_FROM: ${PARTICIPANT_EMAIL_FROM:-Psycheversity Research Team <no-reply@psycheversity.com>}
+      PARTICIPANT_EMAIL_REPLY_TO: ${PARTICIPANT_EMAIL_REPLY_TO:-support@psycheversity.com}
+      SITE_BASE_URL: ${SITE_BASE_URL:-https://psycheversity.com}
       TZ: Asia/Karachi
     depends_on:
       db:

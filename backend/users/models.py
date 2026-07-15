@@ -118,8 +118,17 @@ class User(AbstractUser):
             return False
         if not self.onboarding_completed_at:
             return False
-        due_date = self.onboarding_completed_at + timezone.timedelta(days=7)
-        return timezone.now() >= due_date
+        
+        # Check if they have submitted Day 7 of PRE_T1
+        from activities.models import Submission
+        if Submission.objects.filter(user=self, activity_wave='PRE_T1', experiment_day=7).exists():
+            return True
+
+        # Date-based logic to avoid same-day conflicts
+        today = timezone.localdate()
+        onboard_date = timezone.localtime(self.onboarding_completed_at).date()
+        due_date = onboard_date + timezone.timedelta(days=7)
+        return today >= due_date
 
     @property
     def is_t2_due(self):
@@ -164,16 +173,19 @@ class User(AbstractUser):
         if not self.onboarding_completed_at:
             return None
 
-        now = timezone.now()
+        today = timezone.localdate()
+        onboard_date = timezone.localtime(self.onboarding_completed_at).date()
         due = None
 
         # Evaluate timeline sequentially
         
         # 1. 7_DAYS (T1 post-test)
         if '7_DAYS' not in completed_milestones:
-            due_date = self.onboarding_completed_at + timezone.timedelta(days=7)
-            if now >= due_date:
-                if now - due_date >= timezone.timedelta(days=14):
+            due_date = onboard_date + timezone.timedelta(days=7)
+            from activities.models import Submission
+            day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T1', experiment_day=7).exists()
+            if today >= due_date or day7_submitted:
+                if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                     # 7_DAYS has expired. Move on.
                     pass
                 else:
@@ -189,15 +201,17 @@ class User(AbstractUser):
                     t1_completed_at = t1_rs.completed_at
             
             if t1_completed_at:
-                ref_date = t1_completed_at
+                ref_date = timezone.localtime(t1_completed_at).date()
             else:
-                ref_date = self.onboarding_completed_at + timezone.timedelta(days=7)
+                ref_date = onboard_date + timezone.timedelta(days=7)
 
             # 1.5. 1_MONTH (T-First-Month follow-up)
             if '1_MONTH' not in completed_milestones:
                 due_date = ref_date + timezone.timedelta(days=23)  # 30 days total since onboarding
-                if now >= due_date:
-                    if now - due_date >= timezone.timedelta(days=14):
+                from activities.models import Submission
+                day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T_1M', experiment_day=7).exists()
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 1_MONTH has expired.
                         pass
                     else:
@@ -206,8 +220,10 @@ class User(AbstractUser):
             # 2. 3_MONTHS (T2 follow-up)
             if due is None and '3_MONTHS' not in completed_milestones:
                 due_date = ref_date + timezone.timedelta(days=90)
-                if now >= due_date:
-                    if now - due_date >= timezone.timedelta(days=14):
+                from activities.models import Submission
+                day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T2', experiment_day=7).exists()
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 3_MONTHS has expired.
                         pass
                     else:
@@ -216,8 +232,10 @@ class User(AbstractUser):
             # 3. 6_MONTHS (T3 follow-up)
             if due is None and '6_MONTHS' not in completed_milestones:
                 due_date = ref_date + timezone.timedelta(days=180)
-                if now >= due_date:
-                    if now - due_date >= timezone.timedelta(days=14):
+                from activities.models import Submission
+                day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T3', experiment_day=7).exists()
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 6_MONTHS has expired.
                         pass
                     else:
@@ -226,14 +244,17 @@ class User(AbstractUser):
             # 4. 1_YEAR (T4 follow-up)
             if due is None and '1_YEAR' not in completed_milestones:
                 due_date = ref_date + timezone.timedelta(days=365)
-                if now >= due_date:
-                    if now - due_date >= timezone.timedelta(days=14):
+                from activities.models import Submission
+                day7_submitted = Submission.objects.filter(user=self, activity_wave='PRE_T4', experiment_day=7).exists()
+                if today >= due_date or day7_submitted:
+                    if today >= due_date + timezone.timedelta(days=14) and not day7_submitted:
                         # 1_YEAR has expired.
                         pass
                     else:
                         due = '1_YEAR'
 
         # Cache until midnight
+        now = timezone.now()
         tomorrow = (now + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         seconds_until_midnight = int((tomorrow - now).total_seconds())
         if seconds_until_midnight > 0:
@@ -241,39 +262,6 @@ class User(AbstractUser):
 
         return due
 
-    @property
-    def completion_rate(self):
-        """
-        Calculates the percentage of daily activities completed relative to current day.
-        Caches result for 5 minutes to prevent heavy DB hits on every dashboard refresh.
-        """
-        current_day = self.current_experiment_day
-        if not current_day:
-            return 0
-        
-        cache_key = f"user_{self.user_id}_completion_rate"
-        cached_rate = cache.get(cache_key)
-        if cached_rate is not None:
-            return cached_rate
-
-        effective_day = min(current_day, 7)
-        wave = self.current_activity_wave
-        if not wave:
-            return 0
-
-        from activities.models import Submission
-        submissions_count = Submission.objects.filter(
-            user=self, activity_wave=wave
-        ).values('experiment_day').distinct().count()
-        
-        # Avoid division by zero
-        rate = int((submissions_count / effective_day) * 100) if effective_day > 0 else 0
-        final_rate = min(rate, 100)
-        
-        # Cache for 5 minutes
-        cache.set(cache_key, final_rate, timeout=300)
-        
-        return final_rate
 
     @property
     def has_consecutive_misses(self):
@@ -315,7 +303,7 @@ class User(AbstractUser):
     @property
     def consecutive_misses_message(self):
         if self.has_consecutive_misses:
-            return "We noticed you missed your reflection for a couple of days. Research shows consistency is key to benefit from the intervention. Let's get back on track today!"
+            return "We noticed you missed your reflection for a couple of days. Research shows consistency is key to benefit from the intervention. Let's get back on track today! | ہم نے دیکھا کہ آپ گزشتہ چند دن اپنی انعکاسی تحریر نہیں لکھ سکے۔ تحقیق سے پتہ چلتا ہے کہ اس مشق سے فائدہ اٹھانے کے لیے تسلسل سب سے اہم ہے۔ آئیے آج سے دوبارہ شروعات کریں!"
         return ""
 
     @property
@@ -409,3 +397,21 @@ class EmailVerificationOTP(models.Model):
 
     def __str__(self):
         return f"{self.email} - {self.otp} (Verified: {self.is_verified})"
+
+
+class PasswordResetOTP(models.Model):
+    """
+    One-Time Password (OTP) model specifically for secure password resets.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_resets')
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    def is_valid(self):
+        from datetime import timedelta
+        return timezone.now() < self.created_at + timedelta(minutes=10) and not self.is_used
+
+    def __str__(self):
+        return f"{self.user.username} - {self.otp} (Used: {self.is_used})"
+
